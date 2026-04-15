@@ -250,7 +250,7 @@ body{font-family:'Be Vietnam Pro',sans-serif;background:var(--bg);color:var(--tx
   </div>
   <div id="urgentBanner" style="padding:0;"></div>
   <div class="stat-row">
-    <div class="stat-box"><div class="stat-n" id="sTong" style="color:var(--gr);">0</div><div class="stat-l">Tong diem</div></div>
+    <div class="stat-box"><div class="stat-n" id="sTong" style="color:var(--gr);">0</div><div class="stat-l">Cua hang</div></div>
     <div class="stat-box"><div class="stat-n" id="sDone" style="color:var(--bl);">0</div><div class="stat-l">Da giao</div></div>
     <div class="stat-box"><div class="stat-n" id="sRemain" style="color:var(--or);">0</div><div class="stat-l">Con lai</div></div>
   </div>
@@ -573,7 +573,7 @@ function renderVdList(){
 
   el.innerHTML='';
 
-  // Group by quan if sort=quan - KANBAN layout
+  // Group by quan - single column, moi quan 1 block doc
   if(curSort==='quan'){
     var quanGroups={};
     stores.forEach(function(k){
@@ -584,93 +584,101 @@ function renderVdList(){
     var quanColors=['#1a6b35','#1976d2','#d97706','#7c3aed','#dc2626','#0891b2','#059669'];
     var quanList=Object.keys(quanGroups).sort(function(a,b){return a.localeCompare(b,'vi');});
 
-    // Kanban container - scroll ngang
-    var kanban=document.createElement('div');
-    kanban.style.cssText='display:flex;gap:10px;padding:10px 14px 14px;overflow-x:auto;align-items:flex-start;scrollbar-width:thin;scrollbar-color:#c8dcd0 transparent;-webkit-overflow-scrolling:touch;';
-
     quanList.forEach(function(quan,qi){
       var color=quanColors[qi%quanColors.length];
       var keys=quanGroups[quan];
       var doneCount=keys.filter(function(k){return getStatus(k)==='done';}).length;
       var pct=keys.length?Math.round(doneCount/keys.length*100):0;
 
-      // O quan
-      var col=document.createElement('div');
-      col.style.cssText='flex:0 0 200px;display:flex;flex-direction:column;max-height:500px;border-radius:12px;overflow:hidden;border:1px solid '+color+'44;';
+      // Block header
+      var block=document.createElement('div');
+      block.style.cssText='margin:0 14px 12px;border-radius:12px;overflow:hidden;border:1px solid '+color+'44;';
 
-      // Header o
+      // Header
       var hd=document.createElement('div');
-      hd.style.cssText='background:'+color+';padding:10px 11px 8px;flex-shrink:0;';
+      hd.style.cssText='display:flex;align-items:center;gap:10px;padding:11px 13px 9px;border-left:4px solid '+color+';background:var(--sf);';
       hd.innerHTML=
-        '<div style="display:flex;align-items:center;justify-content:space-between;">'+
-          '<span style="font-size:12px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:120px;">'+esc(quan)+'</span>'+
-          '<span style="font-size:10px;font-weight:700;background:rgba(255,255,255,.25);color:#fff;padding:2px 7px;border-radius:8px;flex-shrink:0;">'+doneCount+'/'+keys.length+'</span>'+
+        '<div style="flex:1;">'+
+          '<div style="font-size:14px;font-weight:700;color:'+color+';">'+esc(quan)+'</div>'+
+          '<div style="font-size:11px;color:var(--mu);margin-top:2px;">'+doneCount+'/'+keys.length+' diem da giao</div>'+
         '</div>'+
-        '<div style="margin-top:6px;height:3px;border-radius:2px;background:rgba(255,255,255,.3);">'+
-          '<div style="height:100%;width:'+pct+'%;background:#fff;border-radius:2px;"></div>'+
-        '</div>'+
-        '<div style="font-size:9px;color:rgba(255,255,255,.75);margin-top:3px;">'+pct+'% hoan thanh</div>';
-      col.appendChild(hd);
+        '<div style="text-align:right;">'+
+          '<div style="font-size:20px;font-weight:800;color:'+color+';">'+pct+'%</div>'+
+          '<div style="font-size:9px;color:var(--mu);">hoan thanh</div>'+
+        '</div>';
+      block.appendChild(hd);
 
-      // Store list - scroll doc trong o
+      // Progress bar
+      var prog=document.createElement('div');
+      prog.style.cssText='height:3px;background:var(--bd);';
+      prog.innerHTML='<div style="height:100%;width:'+pct+'%;background:'+color+';transition:width .4s;"></div>';
+      block.appendChild(prog);
+
+      // Store rows
       var list=document.createElement('div');
-      list.style.cssText='flex:1;overflow-y:auto;background:var(--bg);padding:5px;scrollbar-width:thin;scrollbar-color:'+color+'44 transparent;';
-
-      keys.forEach(function(k,i){
+      list.style.cssText='background:var(--sf);';
+      keys.forEach(function(k,si){
         var s=storeMap[k];
         var st=getStatus(k);
         var isDone=st==='done';
         var isFail=st==='fail';
-        var hasThuNo=s.prods.some(function(p){return p.thuNo>0;});
         var isUrgent=s.prods.some(function(p){return p.lyDo==='date';});
         var isOrder=s.prods.some(function(p){return p.lyDo==='order';});
+        var hasThuNo=s.prods.some(function(p){return p.thuNo>0;});
+        var totalNo=s.prods.reduce(function(acc,p){return acc+(parseFloat(p.thuNo)||0);},0);
 
-        var card=document.createElement('div');
-        card.style.cssText='background:'+(isDone?'var(--bg)':'var(--sf)')+';border-radius:8px;border:0.5px solid '+(isDone?'var(--bd)':isUrgent?'#fca5a5':isOrder?'#93c5fd':'var(--bd)')+';padding:8px 9px;margin-bottom:5px;'+(isDone?'opacity:.5;':'');
+        var prodTxt=s.prods.map(function(p){
+          var note=String(p.ghiChuSP||'');
+          return (p.name||p.sanPham||'')+(note?' ('+note+')':'');
+        }).filter(Boolean).join(' · ');
 
-        var prodLine=s.prods.map(function(p){
-          var tagColor=p.lyDo==='date'?'var(--re)':p.lyDo==='order'?'#1976d2':'var(--mu)';
-          var tagBg=p.lyDo==='date'?'var(--reb)':p.lyDo==='order'?'#dbeafe':'var(--bg)';
-          var tagTxt=p.lyDo==='date'?'Date':p.lyDo==='order'?'Don':'';
-          return '<div style="display:flex;align-items:center;gap:5px;padding:3px 0;border-bottom:.5px solid var(--bd);">'+
-            (tagTxt?'<span style="font-size:8px;font-weight:700;padding:1px 5px;border-radius:5px;background:'+tagBg+';color:'+tagColor+';flex-shrink:0;">'+tagTxt+'</span>':'')+
-            '<span style="font-size:11px;color:var(--tx);flex:1;">'+esc(p.name)+'</span>'+
-            (p.qty?'<span style="font-size:10px;font-weight:700;color:'+color+';">x'+p.qty+'</span>':'')+
-          '</div>';
-        }).join('');
+        var row=document.createElement('div');
+        row.style.cssText='display:flex;align-items:center;gap:9px;padding:10px 13px;border-top:.5px solid var(--bd);'+(isDone?'opacity:.45;':'');
 
-        // Ten sieu thi
-        var nameDiv=document.createElement('div');
-        nameDiv.style.cssText='font-size:12px;font-weight:700;color:var(--tx);margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
-        nameDiv.textContent=(i+1)+'. '+(s.tenCH||'');
-        card.appendChild(nameDiv);
-        // San pham
-        var prodDiv=document.createElement('div');
-        prodDiv.innerHTML=prodLine;
-        card.appendChild(prodDiv);
-        // Action row
-        var actRow=document.createElement('div');
-        actRow.style.cssText='display:flex;gap:4px;margin-top:6px;';
-        var sbk=document.createElement('button');
-        sbk.style.cssText='flex:1;padding:5px 0;border-radius:6px;border:none;background:'+(isDone?'var(--mu)':isFail?'var(--reb)':color)+';color:'+(isFail?'var(--re)':'#fff')+';font-family:sans-serif;font-size:10px;font-weight:700;cursor:pointer;';
-        sbk.textContent=isDone?'Da giao':isFail?'Khong giao':'Giao xong';
-        sbk.onclick=(function(stk){return function(){kanbanCycleStatus(stk);};})(k);
-        actRow.appendChild(sbk);
-        if(s.mapUrl){var ma=document.createElement('a');ma.href=s.mapUrl;ma.target='_blank';ma.style.cssText='padding:5px 8px;border-radius:6px;background:var(--blb);color:var(--bl);font-size:10px;font-weight:700;text-decoration:none;flex-shrink:0;';ma.textContent='Map';actRow.appendChild(ma);}
-        card.appendChild(actRow);
+        // So thu tu
+        var num=document.createElement('div');
+        num.style.cssText='width:24px;height:24px;border-radius:50%;background:'+(isDone?'#888':color)+';color:#fff;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;';
+        num.textContent=isDone?'✓':(si+1);
 
-        list.appendChild(card);
+        // Info
+        var info=document.createElement('div');
+        info.style.cssText='flex:1;min-width:0;';
+        info.innerHTML='<div style="font-size:13px;font-weight:700;color:var(--tx);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+esc(s.tenCH)+'</div>'+
+          (prodTxt?'<div style="font-size:10px;color:var(--mu);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+esc(prodTxt)+'</div>':'')+
+          (hasThuNo?'<div style="font-size:10px;font-weight:700;color:var(--re);margin-top:2px;">Thu no: '+Number(totalNo).toLocaleString('vi-VN')+'d</div>':'');
+
+        // Tag
+        var tag=document.createElement('span');
+        var tagBg=isDone?'var(--bg)':isFail?'var(--reb)':isUrgent?'var(--reb)':isOrder?'#dbeafe':'var(--amb)';
+        var tagColor=isDone?'var(--mu)':isFail?'var(--re)':isUrgent?'var(--re)':isOrder?'#1e40af':'var(--am)';
+        tag.style.cssText='font-size:9px;font-weight:700;padding:3px 8px;border-radius:8px;flex-shrink:0;background:'+tagBg+';color:'+tagColor+';';
+        tag.textContent=isDone?'Xong':isFail?'K.giao':isUrgent?'Gap!':isOrder?'Don':'Sap';
+
+        // Map link
+        var actions=document.createElement('div');
+        actions.style.cssText='display:flex;gap:5px;align-items:center;flex-shrink:0;';
+        if(s.mapUrl){
+          var ml=document.createElement('a');ml.href=s.mapUrl;ml.target='_blank';
+          ml.style.cssText='padding:5px 8px;border-radius:7px;background:var(--blb);color:var(--bl);font-size:10px;font-weight:700;text-decoration:none;';
+          ml.textContent='Map';actions.appendChild(ml);
+        }
+        // Giao xong btn
+        var btn=document.createElement('button');
+        btn.style.cssText='padding:6px 10px;border-radius:7px;border:none;font-family:sans-serif;font-size:10px;font-weight:700;cursor:pointer;background:'+(isDone?'var(--mu)':isFail?'var(--reb)':'var(--gr)')+';color:'+(isFail?'var(--re)':'#fff')+';';
+        btn.textContent=isDone?'✔ Xong':isFail?'✖ K.giao':'○ Giao';
+        btn.onclick=(function(stk){return function(){kanbanCycleStatus(stk);};})(k);
+        actions.appendChild(btn);
+
+        row.appendChild(num);row.appendChild(info);row.appendChild(tag);row.appendChild(actions);
+        list.appendChild(row);
       });
-      col.appendChild(list);
-      kanban.appendChild(col);
+      block.appendChild(list);
+      el.appendChild(block);
     });
-    el.appendChild(kanban);
   } else {
     stores.forEach(function(k,i){renderCard(el,k,storeMap[k],i+1);});
   }
-  updateAllProgress();
 }
-
 
 function updateAllProgress(){
   // Update toan bo progress bar sau khi status thay doi
@@ -1163,145 +1171,138 @@ function computeSmartRoute(){
   if(!el)return;
   el.innerHTML='';
   if(!deliveries.length){
-    el.innerHTML='<div style="padding:40px 20px;text-align:center;font-size:13px;color:var(--mu);">Chua co du lieu van don. Tai lai truoc.</div>';
+    el.innerHTML='<div style="padding:40px 20px;text-align:center;font-size:13px;color:var(--mu);">Chua co du lieu van don. Nhan Tai lai truoc.</div>';
     return;
   }
   var today=new Date();
   var days=['CN','T2','T3','T4','T5','T6','T7'];
   document.getElementById('routeSub').textContent=(MY_NAME||'')+' · '+days[today.getDay()]+', '+today.getDate()+'/'+(today.getMonth()+1);
 
-  // Build store map
-  var stMap={};
+  // Group stores by quan
+  var storeMap={};
   deliveries.forEach(function(r){
     var k=r.tenCH||String(r.stt);
-    if(!stMap[k])stMap[k]={tenCH:r.tenCH||k,quan:r.quan||'',mapUrl:r.mapUrl||'',prods:[],isOrder:false,isDate:false,minDays:99,status:getStatus(k)};
-    stMap[k].prods.push(r);
-    if(r.lyDo==='order')stMap[k].isOrder=true;
-    if(r.lyDo==='date'){stMap[k].isDate=true;var n=parseFloat(r.soLuong||99);if(n<stMap[k].minDays)stMap[k].minDays=n;}
+    if(!storeMap[k])storeMap[k]={tenCH:r.tenCH||k,quan:r.quan||'',mapUrl:r.mapUrl||'',prods:[],stt:r.stt||0};
+    storeMap[k].prods.push(r);
   });
 
-  // Group by quan
-  var quanMap={};
-  Object.keys(stMap).forEach(function(k){
-    var q=stMap[k].quan||'Khac';
-    if(!quanMap[q])quanMap[q]={order:[],red:[],yellow:[],quan:q};
-    var s=stMap[k];
-    if(s.isOrder)quanMap[q].order.push(k);
-    else if(s.isDate&&s.minDays<=2)quanMap[q].red.push(k);
-    else if(s.isDate&&s.minDays<=5)quanMap[q].yellow.push(k);
-    else quanMap[q].yellow.push(k);
+  var stores=Object.keys(storeMap).sort(function(a,b){
+    var qa=storeMap[a].quan||'ZZZ', qb=storeMap[b].quan||'ZZZ';
+    if(qa!==qb)return qa.localeCompare(qb,'vi');
+    return (storeMap[a].stt||0)-(storeMap[b].stt||0);
   });
 
-  // Sort quans: backbone first (has order), then by red count
-  var quans=Object.keys(quanMap).sort(function(a,b){
-    var ao=quanMap[a].order.length>0?1:0, bo=quanMap[b].order.length>0?1:0;
-    if(bo!==ao)return bo-ao;
-    return quanMap[b].red.length-quanMap[a].red.length;
-  });
-
-  // Quans co don dat (backbone) va quans chi red/yellow
-  var backboneQuans=quans.filter(function(q){return quanMap[q].order.length>0;});
-  var suggestQuans=quans.filter(function(q){return quanMap[q].order.length===0&&(quanMap[q].red.length+quanMap[q].yellow.length)>0;});
-
-  // All route stores for maps URL
-  var allStores=[];
-  backboneQuans.forEach(function(q){
-    var g=quanMap[q];
-    g.order.concat(g.red).concat(g.yellow).forEach(function(k){allStores.push(stMap[k]);});
-  });
-
-  // Count
-  var totalOrder=0,totalRed=0,totalYel=0;
-  backboneQuans.forEach(function(q){totalOrder+=quanMap[q].order.length;totalRed+=quanMap[q].red.length;totalYel+=quanMap[q].yellow.length;});
-
-  // Map button
-  var mapUrl=buildMapsUrl(allStores);
-  var mapBtn=document.createElement('a');
-  mapBtn.href=mapUrl;mapBtn.target='_blank';mapBtn.className='rt-map-btn';
-  mapBtn.innerHTML=
-    '<div class="rt-map-ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#1a6b35" stroke-width="2"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/><circle cx="12" cy="9" r="2.5"/></svg></div>'+
-    '<div style="flex:1;"><div class="rt-map-lbl">Mo ban do lo trinh</div><div class="rt-map-sub">'+allStores.length+' diem · Don dat + doc duong</div></div>'+
-    '<div class="rt-map-arr"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5"><path d="M7 17L17 7M7 7h10v10"/></svg></div>';
-  el.appendChild(mapBtn);
+  // Build maps URL toan tuyen
+  var withMap=stores.filter(function(k){return storeMap[k].mapUrl;});
+  var remainMap=stores.filter(function(k){return storeMap[k].mapUrl&&getStatus(k)==='todo';});
+  var allMapUrl=buildMapsUrl(withMap.map(function(k){return storeMap[k];}));
+  var remainMapUrl=buildMapsUrl(remainMap.map(function(k){return storeMap[k];}));
 
   // Stats
-  var stats=document.createElement('div');stats.className='rt-stats';
-  stats.innerHTML=
-    '<div class="rt-stat"><div class="rt-stat-n" style="color:#1976d2;">'+totalOrder+'</div><div class="rt-stat-l">Don dat</div></div>'+
-    '<div class="rt-stat"><div class="rt-stat-n" style="color:var(--re);">'+totalRed+'</div><div class="rt-stat-l">Them do</div></div>'+
-    '<div class="rt-stat"><div class="rt-stat-n" style="color:var(--am);">'+totalYel+'</div><div class="rt-stat-l">Them vang</div></div>';
-  el.appendChild(stats);
-
-  // Timeline
-  var tl=document.createElement('div');tl.className='tl';
-
-  // Diem xuat phat
-  var depotRow=document.createElement('div');depotRow.className='tl-row';
-  depotRow.innerHTML='<div class="tl-col"><div class="tl-dot" style="background:#1a6b35;width:15px;height:15px;"></div><div class="tl-line"></div></div>'+
-    '<div class="tl-body"><div style="background:var(--bg);border-radius:9px;border:.5px solid var(--bd);padding:8px 11px;margin-bottom:4px;"><div style="font-size:12px;font-weight:700;color:var(--tx);">Kho NemThanh</div><div style="font-size:10px;color:var(--mu);">Diem xuat phat</div></div></div>';
-  tl.appendChild(depotRow);
-
-  // Moi quan
-  var qColors=['#1976d2','#7c3aed','#d97706','#0891b2','#059669','#dc2626'];
-  backboneQuans.forEach(function(q,qi){
-    var g=quanMap[q];
-    var color=qColors[qi%qColors.length];
-    var isLast=(qi===backboneQuans.length-1);
-    var row=document.createElement('div');row.className='tl-row';
-    var zoneStores=g.order.concat(g.red).concat(g.yellow).map(function(k){return stMap[k];});
-    var zoneMapUrl=buildMapsUrl(zoneStores);
-
-    var body='<div class="tl-body">';
-    body+='<div class="zone-hd2"><span style="color:'+color+';font-weight:800;">'+esc(q)+'</span><span class="zone-sep2"></span></div>';
-
-    g.order.forEach(function(k){
-      var s=stMap[k];var isDone=s.status==='done';
-      body+='<div class="rt-stop order">'+(isDone?'<div class="rt-stop done" style="display:none;">':'')+
-        '<div class="rt-ico" style="background:'+(isDone?'var(--mu)':'#1976d2')+';">'+(isDone?'&#10003;':'DD')+'</div>'+
-        '<div style="flex:1;min-width:0;"><div class="rt-nm">'+esc(s.tenCH)+'</div>'+
-        '<div class="rt-sp">'+s.prods.map(function(p){return esc(p.sanPham||'');}).join(' · ')+'</div></div>'+
-        '<span class="rt-tag '+(isDone?'rtt-dn':'rtt-ord')+'">'+(isDone?'Xong':'Don dat')+'</span>'+
-        (s.mapUrl?'<a href="'+s.mapUrl+'" target="_blank" style="padding:4px 7px;border-radius:7px;background:var(--blb);color:var(--bl);font-size:10px;font-weight:700;text-decoration:none;flex-shrink:0;">&#128207;</a>':'')+
-      '</div>';
+  var total=stores.length;
+  var done=stores.filter(function(k){return getStatus(k)==='done';}).length;
+  var gap=stores.filter(function(k){
+    return storeMap[k].prods.some(function(r){
+      var m=String(r.ghiChuSP||'').match(/con\s*(\d+)n/i);
+      return r.lyDo==='date'&&m&&parseInt(m[1])<=2;
     });
-    g.red.forEach(function(k){
-      var s=stMap[k];var isDone=s.status==='done';
-      body+='<div class="rt-stop red'+(isDone?' done':'')+'">'+
-        '<div class="rt-ico" style="background:'+(isDone?'var(--mu)':'var(--re)');+'font-size:8px;">'+(isDone?'&#10003;':'+KV')+'</div>'+
-        '<div style="flex:1;min-width:0;"><div class="rt-nm">'+esc(s.tenCH)+'</div>'+
-        '<div class="rt-sp">Con '+s.minDays+'n — gap!</div></div>'+
-        '<span class="rt-tag '+(isDone?'rtt-dn':'rtt-red')+'">'+(isDone?'Xong':'Gap!')+'</span>'+
-        (s.mapUrl?'<a href="'+s.mapUrl+'" target="_blank" style="padding:4px 7px;border-radius:7px;background:var(--blb);color:var(--bl);font-size:10px;font-weight:700;text-decoration:none;flex-shrink:0;">&#128207;</a>':'')+
-      '</div>';
-    });
-    g.yellow.forEach(function(k){
-      var s=stMap[k];var isDone=s.status==='done';
-      body+='<div class="rt-stop yellow'+(isDone?' done':'')+'">'+
-        '<div class="rt-ico" style="background:'+(isDone?'var(--mu)':'var(--am)');+'font-size:8px;">'+(isDone?'&#10003;':'+KV')+'</div>'+
-        '<div style="flex:1;min-width:0;"><div class="rt-nm">'+esc(s.tenCH)+'</div>'+
-        '<div class="rt-sp">Con '+s.minDays+'n — sap</div></div>'+
-        '<span class="rt-tag '+(isDone?'rtt-dn':'rtt-yel')+'">'+(isDone?'Xong':'Sap')+'</span>'+
-        (s.mapUrl?'<a href="'+s.mapUrl+'" target="_blank" style="padding:4px 7px;border-radius:7px;background:var(--blb);color:var(--bl);font-size:10px;font-weight:700;text-decoration:none;flex-shrink:0;">&#128207;</a>':'')+
-      '</div>';
-    });
-    body+='</div>';
+  }).length;
 
-    row.innerHTML='<div class="tl-col"><div class="tl-dot" style="background:'+color+';"></div>'+(isLast?'':'<div class="tl-line"></div>')+'</div>'+body;
-    tl.appendChild(row);
-  });
-  el.appendChild(tl);
+  // == RENDER ==
+  // Stats bar
+  var statsEl=document.createElement('div');
+  statsEl.style.cssText='display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--bd);margin-bottom:10px;';
+  statsEl.innerHTML=
+    '<div style="background:var(--sf);padding:10px;text-align:center;"><div style="font-size:18px;font-weight:800;color:var(--gr);">'+total+'</div><div style="font-size:9px;color:var(--mu);">Tong diem</div></div>'+
+    '<div style="background:var(--sf);padding:10px;text-align:center;"><div style="font-size:18px;font-weight:800;color:var(--re);">'+gap+'</div><div style="font-size:9px;color:var(--mu);">Gap!</div></div>'+
+    '<div style="background:var(--sf);padding:10px;text-align:center;"><div style="font-size:18px;font-weight:800;color:#16a34a;">'+done+'</div><div style="font-size:9px;color:var(--mu);">Da giao</div></div>';
+  el.appendChild(statsEl);
 
-  // Goi y quan them
-  if(suggestQuans.length){
-    var sw=document.createElement('div');sw.className='suggest-wrap';
-    var chips='';
-    suggestQuans.sort(function(a,b){return quanMap[b].red.length-quanMap[a].red.length;}).forEach(function(q){
-      var g=quanMap[q];
-      chips+='<span class="s-chip">'+esc(q)+(g.red.length?' <span class="s-chip-cnt">'+g.red.length+' do</span>':'')+'</span>';
-    });
-    sw.innerHTML='<div class="suggest-hd">Goi y them — quan chua co don dat nhung nhieu diem do:</div><div>'+chips+'</div>';
-    el.appendChild(sw);
+  // Map buttons
+  var mapWrap=document.createElement('div');mapWrap.style.cssText='padding:0 14px 10px;display:flex;flex-direction:column;gap:8px;';
+
+  var btnAll=document.createElement('a');
+  btnAll.href=allMapUrl;btnAll.target='_blank';
+  btnAll.style.cssText='display:flex;align-items:center;gap:12px;background:var(--gr);color:#fff;border-radius:12px;padding:13px 15px;text-decoration:none;';
+  btnAll.innerHTML='<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/><circle cx="12" cy="9" r="2.5"/></svg>'+
+    '<div style="flex:1;"><div style="font-size:14px;font-weight:700;">Mo ban do toan tuyen</div><div style="font-size:11px;opacity:.8;">'+withMap.length+' diem co vi tri</div></div>'+
+    '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5"><path d="M7 17L17 7M7 7h10v10"/></svg>';
+  mapWrap.appendChild(btnAll);
+
+  if(remainMap.length < withMap.length){
+    var btnRemain=document.createElement('a');
+    btnRemain.href=remainMapUrl;btnRemain.target='_blank';
+    btnRemain.style.cssText='display:flex;align-items:center;gap:12px;background:var(--bl);color:#fff;border-radius:12px;padding:13px 15px;text-decoration:none;';
+    btnRemain.innerHTML='<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>'+
+      '<div style="flex:1;"><div style="font-size:14px;font-weight:700;">Chi chua giao</div><div style="font-size:11px;opacity:.8;">'+remainMap.length+' diem con lai</div></div>'+
+      '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5"><path d="M7 17L17 7M7 7h10v10"/></svg>';
+    mapWrap.appendChild(btnRemain);
   }
+  el.appendChild(mapWrap);
+
+  // Danh sach theo quan
+  var quanMap={};
+  stores.forEach(function(k){
+    var q=storeMap[k].quan||'Khac';
+    if(!quanMap[q])quanMap[q]=[];
+    quanMap[q].push(k);
+  });
+  var quanColors=['#1a6b35','#1976d2','#d97706','#7c3aed','#dc2626','#0891b2'];
+  var quanList=Object.keys(quanMap).sort(function(a,b){return a.localeCompare(b,'vi');});
+
+  quanList.forEach(function(quan,qi){
+    var color=quanColors[qi%quanColors.length];
+    var keys=quanMap[quan];
+    var doneC=keys.filter(function(k){return getStatus(k)==='done';}).length;
+
+    // Section header
+    var secHd=document.createElement('div');
+    secHd.style.cssText='display:flex;align-items:center;gap:8px;padding:10px 14px 6px;';
+    secHd.innerHTML=
+      '<div style="width:4px;height:20px;border-radius:2px;background:'+color+';flex-shrink:0;"></div>'+
+      '<span style="font-size:13px;font-weight:700;color:'+color+';flex:1;">'+esc(quan)+'</span>'+
+      '<span style="font-size:11px;color:var(--mu);">'+doneC+'/'+keys.length+'</span>';
+    el.appendChild(secHd);
+
+    // Stores
+    var sec=document.createElement('div');
+    sec.style.cssText='margin:0 14px 6px;background:var(--sf);border-radius:10px;border:1px solid '+color+'33;overflow:hidden;';
+    keys.forEach(function(k,si){
+      var s=storeMap[k];
+      var st=getStatus(k);
+      var isDone=st==='done';
+      var prodTxt=s.prods.slice(0,2).map(function(r){
+        var note=String(r.ghiChuSP||'');
+        var m2=note.match(/con\s*(\d+)n/i);
+        return (r.sanPham||'')+(m2?' (con '+m2[1]+'n)':'');
+      }).join(' · ');
+      var isGap=s.prods.some(function(r){
+        var m3=String(r.ghiChuSP||'').match(/con\s*(\d+)n/i);
+        return r.lyDo==='date'&&m3&&parseInt(m3[1])<=2;
+      });
+      var isOrder=s.prods.some(function(r){return r.lyDo==='order';});
+      var row=document.createElement('div');
+      row.style.cssText='display:flex;align-items:center;gap:9px;padding:9px 12px;border-bottom:.5px solid var(--bd);'+(isDone?'opacity:.45;':'');
+      if(si===keys.length-1)row.style.borderBottom='none';
+      var numEl=document.createElement('div');
+      numEl.style.cssText='width:22px;height:22px;border-radius:50%;background:'+(isDone?'#888':color)+';color:#fff;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;';
+      numEl.textContent=isDone?'✓':(si+1);
+      var info=document.createElement('div');info.style.cssText='flex:1;min-width:0;';
+      info.innerHTML='<div style="font-size:13px;font-weight:700;color:var(--tx);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+esc(s.tenCH)+'</div>'+
+        '<div style="font-size:10px;color:var(--mu);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+esc(prodTxt)+'</div>';
+      var tagEl=document.createElement('span');
+      tagEl.style.cssText='font-size:9px;font-weight:700;padding:2px 7px;border-radius:7px;flex-shrink:0;background:'+(isDone?'var(--bg)':isGap?'var(--reb)':isOrder?'#dbeafe':'var(--amb)')+';color:'+(isDone?'var(--mu)':isGap?'var(--re)':isOrder?'#1e40af':'var(--am)')+';';
+      tagEl.textContent=isDone?'Xong':isGap?'Gap!':isOrder?'Don':'Sap';
+      row.appendChild(numEl);row.appendChild(info);row.appendChild(tagEl);
+      if(s.mapUrl){
+        var ml=document.createElement('a');ml.href=s.mapUrl;ml.target='_blank';
+        ml.style.cssText='padding:5px 9px;border-radius:7px;background:var(--blb);color:var(--bl);font-size:10px;font-weight:700;text-decoration:none;flex-shrink:0;';
+        ml.textContent='Map';row.appendChild(ml);
+      }
+      sec.appendChild(row);
+    });
+    el.appendChild(sec);
+  });
 }
 
 // == LUU TUYEN ==
@@ -1461,7 +1462,7 @@ function applyRouteToday(idx){
     var found=deliveries.find(function(d){return d.tenCH===rs.tenCH;});
     if(found)matched++;
   });
-  toast('Tuyen "'+route.name+'": '+matched+'/'+route.stores.length+' diem co trong van don hom nay');
+  toast('Tuyen '+route.name+': '+matched+'/'+route.stores.length+' diem co trong van don hom nay');
   goTab('vd');
 }
 
@@ -1469,7 +1470,7 @@ function kanbanCycleStatus(k){
   if(!k)return;
   cycleStatus(k);
 }
-function goToVdAll(){setFilter("all");goTab("vd");}
+function goToVdAll(){setFilter('all');goTab('vd');}
 </script>
 </body>
 </html>
