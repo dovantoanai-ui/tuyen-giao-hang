@@ -394,7 +394,7 @@ function ld(k,d){try{var v=localStorage.getItem(k);return v!==null?JSON.parse(v)
 function sv(k,v){localStorage.setItem(k,JSON.stringify(v));}
 function todayStr(){var d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 function toast(msg){var t=document.getElementById('toast');t.textContent=msg;t.classList.add('on');setTimeout(function(){t.classList.remove('on');},2500);}
-function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function esc(s){var t=document.createElement('div');t.textContent=String(s||'');return t.innerHTML;}
 
 // == INIT ==
 statusMap = ld('gh_status_'+todayStr(), {});
@@ -573,7 +573,7 @@ function renderVdList(){
 
   el.innerHTML='';
 
-  // Group by quan if sort=quan
+  // Group by quan if sort=quan - KANBAN layout
   if(curSort==='quan'){
     var quanGroups={};
     stores.forEach(function(k){
@@ -583,44 +583,91 @@ function renderVdList(){
     });
     var quanColors=['#1a6b35','#1976d2','#d97706','#7c3aed','#dc2626','#0891b2','#059669'];
     var quanList=Object.keys(quanGroups).sort(function(a,b){return a.localeCompare(b,'vi');});
+
+    // Kanban container - scroll ngang
+    var kanban=document.createElement('div');
+    kanban.style.cssText='display:flex;gap:10px;padding:10px 14px 14px;overflow-x:auto;align-items:flex-start;scrollbar-width:thin;scrollbar-color:#c8dcd0 transparent;-webkit-overflow-scrolling:touch;';
+
     quanList.forEach(function(quan,qi){
       var color=quanColors[qi%quanColors.length];
       var keys=quanGroups[quan];
       var doneCount=keys.filter(function(k){return getStatus(k)==='done';}).length;
       var pct=keys.length?Math.round(doneCount/keys.length*100):0;
 
-      // Header section
-      var secHd=document.createElement('div');
-      secHd.className='sec-hd-area';
-      secHd.style.borderLeft='4px solid '+color;
-      secHd.style.background='rgba(0,0,0,.03)';
-      secHd.style.borderRadius='0 8px 8px 0';
-      secHd.style.marginLeft='14px';
-      secHd.style.marginRight='14px';
-      secHd.style.padding='8px 12px';
-      secHd.innerHTML=
-        '<div style="flex:1;">'+
-          '<div style="font-size:14px;font-weight:800;color:'+color+';">'+esc(quan)+'</div>'+
-          '<div style="font-size:11px;color:var(--mu);margin-top:2px;">'+doneCount+'/'+keys.length+' diem da giao</div>'+
+      // O quan
+      var col=document.createElement('div');
+      col.style.cssText='flex:0 0 200px;display:flex;flex-direction:column;max-height:500px;border-radius:12px;overflow:hidden;border:1px solid '+color+'44;';
+
+      // Header o
+      var hd=document.createElement('div');
+      hd.style.cssText='background:'+color+';padding:10px 11px 8px;flex-shrink:0;';
+      hd.innerHTML=
+        '<div style="display:flex;align-items:center;justify-content:space-between;">'+
+          '<span style="font-size:12px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:120px;">'+esc(quan)+'</span>'+
+          '<span style="font-size:10px;font-weight:700;background:rgba(255,255,255,.25);color:#fff;padding:2px 7px;border-radius:8px;flex-shrink:0;">'+doneCount+'/'+keys.length+'</span>'+
         '</div>'+
-        '<div style="text-align:right;">'+
-          '<div style="font-size:18px;font-weight:800;color:'+color+';">'+pct+'%</div>'+
-          '<div style="font-size:10px;color:var(--mu);">hoan thanh</div>'+
-        '</div>';
-      el.appendChild(secHd);
+        '<div style="margin-top:6px;height:3px;border-radius:2px;background:rgba(255,255,255,.3);">'+
+          '<div style="height:100%;width:'+pct+'%;background:#fff;border-radius:2px;"></div>'+
+        '</div>'+
+        '<div style="font-size:9px;color:rgba(255,255,255,.75);margin-top:3px;">'+pct+'% hoan thanh</div>';
+      col.appendChild(hd);
 
-      // Thanh progress
-      var prog=document.createElement('div');
-      prog.style.cssText='height:3px;margin:4px 14px 8px;background:var(--bd);border-radius:2px;overflow:hidden;';
-      prog.innerHTML='<div style="height:100%;width:'+pct+'%;background:'+color+';border-radius:2px;transition:width .4s;"></div>';
-      el.appendChild(prog);
+      // Store list - scroll doc trong o
+      var list=document.createElement('div');
+      list.style.cssText='flex:1;overflow-y:auto;background:var(--bg);padding:5px;scrollbar-width:thin;scrollbar-color:'+color+'44 transparent;';
 
-      keys.forEach(function(k,i){renderCard(el,k,storeMap[k],i+1,color);});
+      keys.forEach(function(k,i){
+        var s=storeMap[k];
+        var st=getStatus(k);
+        var isDone=st==='done';
+        var isFail=st==='fail';
+        var hasThuNo=s.prods.some(function(p){return p.thuNo>0;});
+        var isUrgent=s.prods.some(function(p){return p.lyDo==='date';});
+        var isOrder=s.prods.some(function(p){return p.lyDo==='order';});
+
+        var card=document.createElement('div');
+        card.style.cssText='background:'+(isDone?'var(--bg)':'var(--sf)')+';border-radius:8px;border:0.5px solid '+(isDone?'var(--bd)':isUrgent?'#fca5a5':isOrder?'#93c5fd':'var(--bd)')+';padding:8px 9px;margin-bottom:5px;'+(isDone?'opacity:.5;':'');
+
+        var prodLine=s.prods.map(function(p){
+          var tagColor=p.lyDo==='date'?'var(--re)':p.lyDo==='order'?'#1976d2':'var(--mu)';
+          var tagBg=p.lyDo==='date'?'var(--reb)':p.lyDo==='order'?'#dbeafe':'var(--bg)';
+          var tagTxt=p.lyDo==='date'?'Date':p.lyDo==='order'?'Don':'';
+          return '<div style="display:flex;align-items:center;gap:5px;padding:3px 0;border-bottom:.5px solid var(--bd);">'+
+            (tagTxt?'<span style="font-size:8px;font-weight:700;padding:1px 5px;border-radius:5px;background:'+tagBg+';color:'+tagColor+';flex-shrink:0;">'+tagTxt+'</span>':'')+
+            '<span style="font-size:11px;color:var(--tx);flex:1;">'+esc(p.name)+'</span>'+
+            (p.qty?'<span style="font-size:10px;font-weight:700;color:'+color+';">x'+p.qty+'</span>':'')+
+          '</div>';
+        }).join('');
+
+        // Ten sieu thi
+        var nameDiv=document.createElement('div');
+        nameDiv.style.cssText='font-size:12px;font-weight:700;color:var(--tx);margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
+        nameDiv.textContent=(i+1)+'. '+(s.tenCH||'');
+        card.appendChild(nameDiv);
+        // San pham
+        var prodDiv=document.createElement('div');
+        prodDiv.innerHTML=prodLine;
+        card.appendChild(prodDiv);
+        // Action row
+        var actRow=document.createElement('div');
+        actRow.style.cssText='display:flex;gap:4px;margin-top:6px;';
+        var sbk=document.createElement('button');
+        sbk.style.cssText='flex:1;padding:5px 0;border-radius:6px;border:none;background:'+(isDone?'var(--mu)':isFail?'var(--reb)':color)+';color:'+(isFail?'var(--re)':'#fff')+';font-family:sans-serif;font-size:10px;font-weight:700;cursor:pointer;';
+        sbk.textContent=isDone?'Da giao':isFail?'Khong giao':'Giao xong';
+        sbk.onclick=(function(stk){return function(){kanbanCycleStatus(stk);};})(k);
+        actRow.appendChild(sbk);
+        if(s.mapUrl){var ma=document.createElement('a');ma.href=s.mapUrl;ma.target='_blank';ma.style.cssText='padding:5px 8px;border-radius:6px;background:var(--blb);color:var(--bl);font-size:10px;font-weight:700;text-decoration:none;flex-shrink:0;';ma.textContent='Map';actRow.appendChild(ma);}
+        card.appendChild(actRow);
+
+        list.appendChild(card);
+      });
+      col.appendChild(list);
+      kanban.appendChild(col);
     });
+    el.appendChild(kanban);
   } else {
     stores.forEach(function(k,i){renderCard(el,k,storeMap[k],i+1);});
   }
-  // Update progress sau khi render xong
   updateAllProgress();
 }
 
@@ -942,7 +989,7 @@ function drawMap(){
       var bx=align==='right'?tx-tw:tx;
       ctx.fillStyle='rgba(255,255,255,.85)';
       var rectH=13;
-      ctx.roundRect?ctx.roundRect(bx-2,y-rectH/2,tw+4,rectH,3):(function(){ctx.rect(bx-2,y-rectH/2,tw+4,rectH);}());
+      ctx.rect(bx-2,y-rectH/2,tw+4,rectH);
       ctx.fill();
       ctx.fillStyle=isDone?'#aaa':color;
       ctx.textAlign=align;ctx.textBaseline='middle';
@@ -1209,7 +1256,7 @@ function computeSmartRoute(){
 
     g.order.forEach(function(k){
       var s=stMap[k];var isDone=s.status==='done';
-      body+='<div class="rt-stop order'+(isDone?' done':'')+'">'+
+      body+='<div class="rt-stop order">'+(isDone?'<div class="rt-stop done" style="display:none;">':'')+
         '<div class="rt-ico" style="background:'+(isDone?'var(--mu)':'#1976d2')+';">'+(isDone?'&#10003;':'DD')+'</div>'+
         '<div style="flex:1;min-width:0;"><div class="rt-nm">'+esc(s.tenCH)+'</div>'+
         '<div class="rt-sp">'+s.prods.map(function(p){return esc(p.sanPham||'');}).join(' · ')+'</div></div>'+
@@ -1416,6 +1463,11 @@ function applyRouteToday(idx){
   });
   toast('Tuyen "'+route.name+'": '+matched+'/'+route.stores.length+' diem co trong van don hom nay');
   goTab('vd');
+}
+
+function kanbanCycleStatus(k){
+  if(!k)return;
+  cycleStatus(k);
 }
 function goToVdAll(){setFilter("all");goTab("vd");}
 </script>
