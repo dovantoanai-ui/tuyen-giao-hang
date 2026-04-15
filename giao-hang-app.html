@@ -115,6 +115,11 @@ body{font-family:'Be Vietnam Pro',sans-serif;background:var(--bg);color:var(--tx
 /* EMPTY */
 .empty{text-align:center;padding:50px 24px;}
 
+/* BLINK URGENT */
+@keyframes blinkCard{0%,100%{border-color:var(--re);}50%{border-color:transparent;}}
+@keyframes blinkAmber{0%,100%{border-color:#d97706;}50%{border-color:transparent;}}
+.vd-urgent{animation:blinkCard 1s infinite;border-left:3px solid var(--re) !important;background:#fff9f9 !important;}
+.vd-order{border-left:3px solid #1976d2 !important;background:#f0f6ff !important;}
 /* URGENT BANNER */
 .urg-banner{border-radius:12px;overflow:hidden;margin:8px 14px;}
 .urg-hd{padding:9px 13px;display:flex;align-items:center;gap:8px;}
@@ -349,7 +354,7 @@ body{font-family:'Be Vietnam Pro',sans-serif;background:var(--bg);color:var(--tx
 <!-- LUU TUYEN -->
 <div class="sc" id="s-saved">
   <div class="tb">
-    <div style="flex:1"><div class="tb-ttl">Tuyen da luu</div><div class="tb-sub">Toi da 5 tuyen</div></div>
+    <div style="flex:1"><div class="tb-ttl">Tuyen da luu</div><div class="tb-sub">Toi da 20 tuyen</div></div>
     <button class="tb-btn or" onclick="openCreateRoute()">+ Tao tuyen</button>
   </div>
   <div id="savedRoutesContent" style="padding-top:10px;"></div>
@@ -543,7 +548,25 @@ function renderVdList(){
     return true;
   });
 
-  // Sort
+  // Sort urgent/order len dau (truoc ca sort quan/thu tu)
+  stores.sort(function(a,b){
+    var sa=storeMap[a],sb=storeMap[b];
+    var isDoneA=getStatus(a)==='done',isDoneB=getStatus(b)==='done';
+    if(isDoneA&&!isDoneB)return 1;if(!isDoneA&&isDoneB)return -1;
+    // Tinh priority
+    function pri(s){
+      var prods=s.prods||[];
+      var hasGap=prods.some(function(p){
+        var m=String(p.ghiChuSP||'').match(/con\s*(\d+)n/i);
+        return p.lyDo==='date'&&m&&parseInt(m[1])<=2;
+      });
+      var hasOrder=prods.some(function(p){return p.lyDo==='order';});
+      if(hasGap)return 0;if(hasOrder)return 1;return 2;
+    }
+    return pri(sa)-pri(sb);
+  });
+
+  // Sort theo quan/thu tu (giu urgent len dau trong moi nhom)
   if(curSort==='quan'){
     stores.sort(function(a,b){
       var qa = storeMap[a].quan||'ZZZ';
@@ -707,9 +730,14 @@ function renderCard(container, key, store, idx, accentColor){
   var isUrgent = store.prods.some(function(p){return p.lyDo==='date';});
 
   var card=document.createElement('div');
-  card.className='dl-card '+(isDone?'done':'');
+  var isGapCard=!isDone&&store.prods.some(function(p){
+    var m2=String(p.ghiChuSP||'').match(/con\s*(\d+)n/i);
+    return p.lyDo==='date'&&m2&&parseInt(m2[1])<=2;
+  });
+  var isOrderCard=!isDone&&store.prods.some(function(p){return p.lyDo==='order';});
+  card.className='dl-card '+(isDone?'done':isGapCard?'vd-urgent':isOrderCard?'vd-order':'');
   card.style.margin='0 14px 8px';
-  card.style.borderLeft='3px solid '+(isDone?'var(--mu)':accentColor||'var(--gr)');
+  if(!isDone&&!isGapCard&&!isOrderCard)card.style.borderLeft='3px solid '+(accentColor||'var(--gr)');
 
   var prodsHtml='';
   store.prods.forEach(function(p){
@@ -1170,135 +1198,254 @@ function computeSmartRoute(){
   var el=document.getElementById('routeContent');
   if(!el)return;
   el.innerHTML='';
-  if(!deliveries.length){
-    el.innerHTML='<div style="padding:40px 20px;text-align:center;font-size:13px;color:var(--mu);">Chua co du lieu van don. Nhan Tai lai truoc.</div>';
-    return;
-  }
+
   var today=new Date();
   var days=['CN','T2','T3','T4','T5','T6','T7'];
   document.getElementById('routeSub').textContent=(MY_NAME||'')+' · '+days[today.getDay()]+', '+today.getDate()+'/'+(today.getMonth()+1);
 
-  // Group stores by quan
-  var storeMap={};
+  if(!deliveries.length){
+    el.innerHTML='<div style="padding:40px;text-align:center;font-size:13px;color:var(--mu);">Chua co du lieu. Nhan Tai lai.</div>';
+    return;
+  }
+
+  // Build store data
+  var stMap={};
   deliveries.forEach(function(r){
     var k=r.tenCH||String(r.stt);
-    if(!storeMap[k])storeMap[k]={tenCH:r.tenCH||k,quan:r.quan||'',mapUrl:r.mapUrl||'',prods:[],stt:r.stt||0};
-    storeMap[k].prods.push(r);
+    if(!stMap[k])stMap[k]={tenCH:r.tenCH||k,quan:r.quan||'',mapUrl:r.mapUrl||'',prods:[],stt:r.stt||0};
+    stMap[k].prods.push(r);
   });
-
-  var stores=Object.keys(storeMap).sort(function(a,b){
-    var qa=storeMap[a].quan||'ZZZ', qb=storeMap[b].quan||'ZZZ';
-    if(qa!==qb)return qa.localeCompare(qb,'vi');
-    return (storeMap[a].stt||0)-(storeMap[b].stt||0);
-  });
-
-  // Build maps URL toan tuyen
-  var withMap=stores.filter(function(k){return storeMap[k].mapUrl;});
-  var remainMap=stores.filter(function(k){return storeMap[k].mapUrl&&getStatus(k)==='todo';});
-  var allMapUrl=buildMapsUrl(withMap.map(function(k){return storeMap[k];}));
-  var remainMapUrl=buildMapsUrl(remainMap.map(function(k){return storeMap[k];}));
+  var allKeys=Object.keys(stMap).sort(function(a,b){return (stMap[a].stt||0)-(stMap[b].stt||0);});
+  var withMap=allKeys.filter(function(k){return stMap[k].mapUrl;});
+  var remainMap=allKeys.filter(function(k){return stMap[k].mapUrl&&getStatus(k)==='todo';});
+  var total=allKeys.length;
+  var done=allKeys.filter(function(k){return getStatus(k)==='done';}).length;
 
   // Stats
-  var total=stores.length;
-  var done=stores.filter(function(k){return getStatus(k)==='done';}).length;
-  var gap=stores.filter(function(k){
-    return storeMap[k].prods.some(function(r){
-      var m=String(r.ghiChuSP||'').match(/con\s*(\d+)n/i);
-      return r.lyDo==='date'&&m&&parseInt(m[1])<=2;
-    });
-  }).length;
-
-  // == RENDER ==
-  // Stats bar
   var statsEl=document.createElement('div');
-  statsEl.style.cssText='display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--bd);margin-bottom:10px;';
+  statsEl.style.cssText='display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--bd);';
   statsEl.innerHTML=
-    '<div style="background:var(--sf);padding:10px;text-align:center;"><div style="font-size:18px;font-weight:800;color:var(--gr);">'+total+'</div><div style="font-size:9px;color:var(--mu);">Tong diem</div></div>'+
-    '<div style="background:var(--sf);padding:10px;text-align:center;"><div style="font-size:18px;font-weight:800;color:var(--re);">'+gap+'</div><div style="font-size:9px;color:var(--mu);">Gap!</div></div>'+
-    '<div style="background:var(--sf);padding:10px;text-align:center;"><div style="font-size:18px;font-weight:800;color:#16a34a;">'+done+'</div><div style="font-size:9px;color:var(--mu);">Da giao</div></div>';
+    '<div style="background:var(--sf);padding:10px;text-align:center;"><div style="font-size:20px;font-weight:800;color:var(--gr);">'+total+'</div><div style="font-size:9px;color:var(--mu);">Tong diem</div></div>'+
+    '<div style="background:var(--sf);padding:10px;text-align:center;"><div style="font-size:20px;font-weight:800;color:#16a34a;">'+done+'</div><div style="font-size:9px;color:var(--mu);">Da giao</div></div>'+
+    '<div style="background:var(--sf);padding:10px;text-align:center;"><div style="font-size:20px;font-weight:800;color:var(--or);">'+(total-done)+'</div><div style="font-size:9px;color:var(--mu);">Con lai</div></div>';
   el.appendChild(statsEl);
 
   // Map buttons
-  var mapWrap=document.createElement('div');mapWrap.style.cssText='padding:0 14px 10px;display:flex;flex-direction:column;gap:8px;';
-
+  var mapWrap=document.createElement('div');
+  mapWrap.style.cssText='padding:10px 14px;display:flex;flex-direction:column;gap:8px;';
   var btnAll=document.createElement('a');
-  btnAll.href=allMapUrl;btnAll.target='_blank';
+  btnAll.href=buildMapsUrl(withMap.map(function(k){return stMap[k];}));
+  btnAll.target='_blank';
   btnAll.style.cssText='display:flex;align-items:center;gap:12px;background:var(--gr);color:#fff;border-radius:12px;padding:13px 15px;text-decoration:none;';
-  btnAll.innerHTML='<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/><circle cx="12" cy="9" r="2.5"/></svg>'+
-    '<div style="flex:1;"><div style="font-size:14px;font-weight:700;">Mo ban do toan tuyen</div><div style="font-size:11px;opacity:.8;">'+withMap.length+' diem co vi tri</div></div>'+
-    '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5"><path d="M7 17L17 7M7 7h10v10"/></svg>';
+  btnAll.innerHTML='<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/><circle cx="12" cy="9" r="2.5"/></svg><div style="flex:1;"><div style="font-size:14px;font-weight:700;">Mo ban do toan tuyen</div><div style="font-size:11px;opacity:.75;">'+withMap.length+' diem · Google Maps</div></div><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5"><path d="M7 17L17 7M7 7h10v10"/></svg>';
   mapWrap.appendChild(btnAll);
-
-  if(remainMap.length < withMap.length){
-    var btnRemain=document.createElement('a');
-    btnRemain.href=remainMapUrl;btnRemain.target='_blank';
-    btnRemain.style.cssText='display:flex;align-items:center;gap:12px;background:var(--bl);color:#fff;border-radius:12px;padding:13px 15px;text-decoration:none;';
-    btnRemain.innerHTML='<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>'+
-      '<div style="flex:1;"><div style="font-size:14px;font-weight:700;">Chi chua giao</div><div style="font-size:11px;opacity:.8;">'+remainMap.length+' diem con lai</div></div>'+
-      '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5"><path d="M7 17L17 7M7 7h10v10"/></svg>';
-    mapWrap.appendChild(btnRemain);
+  if(remainMap.length&&remainMap.length<withMap.length){
+    var btnR=document.createElement('a');
+    btnR.href=buildMapsUrl(remainMap.map(function(k){return stMap[k];}));
+    btnR.target='_blank';
+    btnR.style.cssText='display:flex;align-items:center;gap:12px;background:var(--bl);color:#fff;border-radius:12px;padding:12px 15px;text-decoration:none;';
+    btnR.innerHTML='<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg><div style="flex:1;font-size:13px;font-weight:700;">Chi chua giao ('+remainMap.length+' diem)</div><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5"><path d="M7 17L17 7M7 7h10v10"/></svg>';
+    mapWrap.appendChild(btnR);
   }
   el.appendChild(mapWrap);
 
+  // == BAN DO GIA LAP - Canvas nhanh ==
+  var mapWrap2=document.createElement('div');
+  mapWrap2.style.cssText='position:relative;background:#e8f0e3;margin:0 0 0;';
+  var cvas=document.createElement('canvas');
+  cvas.style.cssText='display:block;width:100%;';
+  mapWrap2.appendChild(cvas);
+  el.appendChild(mapWrap2);
+
+  // Vi tri quan theo la ban do Ha Noi (0-1 normalized, y=0 la bac)
+  var QUAN_POS={
+    'Tay Ho':     {x:.55,y:.12},
+    'Bac TU Liem':{x:.28,y:.15},
+    'Bac TL':     {x:.42,y:.15},
+    'Long Bien':  {x:.78,y:.22},
+    'Cau Giay':   {x:.33,y:.33},
+    'Ba Dinh':    {x:.52,y:.30},
+    'Hoan Kiem':  {x:.58,y:.38},
+    'Dong Da':    {x:.52,y:.44},
+    'Hai Ba Trung':{x:.65,y:.45},
+    'Nam TU Liem':{x:.22,y:.42},
+    'Nam TL':     {x:.20,y:.52},
+    'Thanh Xuan': {x:.50,y:.60},
+    'Ha Dong':    {x:.22,y:.72},
+    'Hoang Mai':  {x:.62,y:.68},
+    'Gia Lam':    {x:.82,y:.40},
+    'Long Bien2': {x:.78,y:.35},
+    'Thuong Tin': {x:.50,y:.88},
+    'Khac':       {x:.50,y:.50},
+  };
+  function getQPos(q){
+    if(!q)return QUAN_POS['Khac'];
+    for(var k in QUAN_POS){
+      if(q.toLowerCase().indexOf(k.toLowerCase())>=0)return QUAN_POS[k];
+    }
+    return QUAN_POS['Khac'];
+  }
+
+  // Tinh toa do tung diem (golden angle scatter trong quan)
+  var quanCount={};
+  var pts=[];
+  // Kho (xuat phat): gan Ba Dinh / Cau Giay
+  pts.push({name:'KHO',x:.38,y:.28,t:'depot',idx:0,k:'__depot__',mapUrl:''});
+
+  allKeys.forEach(function(k,i){
+    var s=stMap[k];
+    var q=s.quan||'Khac';
+    if(!quanCount[q])quanCount[q]=0;
+    var base=getQPos(q);
+    var angle=quanCount[q]*2.399;
+    var rad=0.025+Math.floor(quanCount[q]/5)*0.022;
+    quanCount[q]++;
+    var px=Math.max(0.04,Math.min(0.96, base.x+Math.cos(angle)*rad));
+    var py=Math.max(0.04,Math.min(0.96, base.y+Math.sin(angle)*rad*1.1));
+
+    var st=getStatus(k);
+    var isDone=st==='done';
+    var isGap=!isDone&&s.prods.some(function(r){
+      var m=String(r.ghiChuSP||'').match(/con\s*(\d+)n/i);
+      return r.lyDo==='date'&&m&&parseInt(m[1])<=2;
+    });
+    var isOrder=!isDone&&s.prods.some(function(r){return r.lyDo==='order';});
+    var type=isDone?'done':isGap?'gap':isOrder?'order':'sap';
+
+    var shortName=s.tenCH.length>10?s.tenCH.slice(0,9)+'…':s.tenCH;
+    pts.push({name:shortName,x:px,y:py,t:type,idx:i+1,k:k,mapUrl:s.mapUrl});
+  });
+
+  // Draw
+  function drawSimpleMap(){
+    var W=mapWrap2.offsetWidth||360;
+    var H=Math.round(W*0.65);
+    cvas.width=W;cvas.height=H;
+    var ctx=cvas.getContext('2d');
+
+    function sx(v){return v*W;}
+    function sy(v){return v*H;}
+
+    // Nen
+    ctx.fillStyle='#e8f0e3';ctx.fillRect(0,0,W,H);
+    // Dot grid
+    ctx.fillStyle='rgba(255,255,255,.4)';
+    for(var gy=0;gy<H;gy+=24){for(var gx=0;gx<W;gx+=24){ctx.beginPath();ctx.arc(gx,gy,1.2,0,Math.PI*2);ctx.fill();}}
+    // Duong pho
+    var roads=[[0,.30,1,.29],[0,.50,1,.50],[0,.68,1,.68],[0,.16,1,.15],[.30,0,.31,1],[.52,0,.52,1],[.70,0,.70,1],[.20,0,.21,1]];
+    roads.forEach(function(r){
+      ctx.beginPath();ctx.moveTo(sx(r[0]),sy(r[1]));ctx.lineTo(sx(r[2]),sy(r[3]));
+      ctx.strokeStyle='rgba(255,255,255,.8)';ctx.lineWidth=3.5;ctx.lineCap='round';ctx.stroke();
+    });
+    // Nhan huong
+    ctx.fillStyle='rgba(0,0,0,.18)';ctx.font='bold 8px sans-serif';ctx.textAlign='center';
+    ctx.fillText('Bắc',W/2,10);
+    ctx.fillText('Nam',W/2,H-4);
+    ctx.fillText('T',8,H/2);
+    ctx.fillText('D',W-8,H/2);
+
+    // Tuyendduong
+    var route=pts.filter(function(p){return p.t!=='done';});
+    if(route.length>1){
+      ctx.beginPath();
+      route.forEach(function(p,i){i===0?ctx.moveTo(sx(p.x),sy(p.y)):ctx.lineTo(sx(p.x),sy(p.y));});
+      ctx.strokeStyle='rgba(26,107,53,.5)';ctx.lineWidth=1.5;ctx.setLineDash([7,4]);ctx.stroke();ctx.setLineDash([]);
+    }
+
+    // Ve diem
+    pts.forEach(function(p){
+      var x=sx(p.x),y=sy(p.y);
+      var isDepot=p.t==='depot';
+      var r=isDepot?9:7;
+      var color={depot:'#1a6b35',order:'#1976d2',gap:'#dc2626',sap:'#d97706',done:'#888'}[p.t]||'#888';
+      // Gap pulse
+      if(p.t==='gap'){ctx.beginPath();ctx.arc(x,y,r+4,0,Math.PI*2);ctx.fillStyle='rgba(220,38,38,.15)';ctx.fill();}
+      // Circle
+      ctx.shadowColor='rgba(0,0,0,.2)';ctx.shadowBlur=4;
+      ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fillStyle=color;ctx.fill();
+      ctx.shadowBlur=0;
+      ctx.strokeStyle='#fff';ctx.lineWidth=1.5;ctx.stroke();
+      // Text
+      ctx.fillStyle='#fff';ctx.font='bold '+(isDepot?'6':'8')+'px sans-serif';
+      ctx.textAlign='center';ctx.textBaseline='middle';
+      if(p.t==='done')ctx.fillText('✓',x,y);
+      else if(isDepot)ctx.fillText('KHO',x,y);
+      else ctx.fillText(p.idx,x,y);
+      // Ten
+      if(!isDepot){
+        var tx=x>W*0.7?x-r-3:x+r+3;
+        var align=x>W*0.7?'right':'left';
+        ctx.font='9px sans-serif';
+        var tw=ctx.measureText(p.name).width;
+        var bx=align==='right'?tx-tw-2:tx-2;
+        ctx.fillStyle='rgba(255,255,255,.82)';
+        ctx.fillRect(bx,y-6,tw+4,12);
+        ctx.fillStyle=color;ctx.textAlign=align;ctx.textBaseline='middle';
+        ctx.fillText(p.name,tx,y);
+      }
+    });
+    // Legend
+    var lg=[['#1a6b35','Kho'],['#1976d2','Don dat'],['#dc2626','Gap!'],['#d97706','Sap'],['#888','Da giao']];
+    var lx=6,ly=H-14;
+    ctx.font='9px sans-serif';ctx.textBaseline='middle';
+    lg.forEach(function(item){
+      ctx.beginPath();ctx.arc(lx+5,ly,4,0,Math.PI*2);ctx.fillStyle=item[0];ctx.fill();
+      ctx.fillStyle='rgba(0,0,0,.55)';ctx.textAlign='left';
+      ctx.fillText(item[1],lx+12,ly);
+      lx+=ctx.measureText(item[1]).width+20;
+    });
+  }
+  setTimeout(drawSimpleMap,50);
+
+  // Legend ngang phia duoi
+  var legEl=document.createElement('div');
+  legEl.style.cssText='display:flex;gap:12px;padding:7px 14px;background:var(--sf);border-top:.5px solid var(--bd);flex-wrap:wrap;font-size:10px;color:var(--mu);';
+  [['#1a6b35','Kho'],['#1976d2','Don dat'],['#dc2626','Gap!'],['#d97706','Sap het'],['#888','Da giao']].forEach(function(item){
+    var span=document.createElement('div');
+    span.style.cssText='display:flex;align-items:center;gap:4px;';
+    span.innerHTML='<div style="width:9px;height:9px;border-radius:50%;background:'+item[0]+';"></div>'+item[1];
+    legEl.appendChild(span);
+  });
+  el.appendChild(legEl);
+
   // Danh sach theo quan
   var quanMap={};
-  stores.forEach(function(k){
-    var q=storeMap[k].quan||'Khac';
-    if(!quanMap[q])quanMap[q]=[];
-    quanMap[q].push(k);
+  allKeys.forEach(function(k){
+    var q=stMap[k].quan||'Khac';
+    if(!quanMap[q])quanMap[q]=[];quanMap[q].push(k);
   });
-  var quanColors=['#1a6b35','#1976d2','#d97706','#7c3aed','#dc2626','#0891b2'];
-  var quanList=Object.keys(quanMap).sort(function(a,b){return a.localeCompare(b,'vi');});
-
-  quanList.forEach(function(quan,qi){
-    var color=quanColors[qi%quanColors.length];
+  var qColors=['#1a6b35','#1976d2','#d97706','#7c3aed','#dc2626','#0891b2'];
+  Object.keys(quanMap).sort(function(a,b){return a.localeCompare(b,'vi');}).forEach(function(quan,qi){
+    var color=qColors[qi%qColors.length];
     var keys=quanMap[quan];
     var doneC=keys.filter(function(k){return getStatus(k)==='done';}).length;
-
-    // Section header
     var secHd=document.createElement('div');
-    secHd.style.cssText='display:flex;align-items:center;gap:8px;padding:10px 14px 6px;';
-    secHd.innerHTML=
-      '<div style="width:4px;height:20px;border-radius:2px;background:'+color+';flex-shrink:0;"></div>'+
-      '<span style="font-size:13px;font-weight:700;color:'+color+';flex:1;">'+esc(quan)+'</span>'+
-      '<span style="font-size:11px;color:var(--mu);">'+doneC+'/'+keys.length+'</span>';
+    secHd.style.cssText='display:flex;align-items:center;gap:8px;padding:9px 14px 5px;border-top:.5px solid var(--bd);';
+    secHd.innerHTML='<div style="width:3px;height:16px;border-radius:2px;background:'+color+';flex-shrink:0;"></div>'+
+      '<span style="font-size:12px;font-weight:700;color:'+color+';flex:1;">'+esc(quan)+'</span>'+
+      '<span style="font-size:10px;color:var(--mu);">'+doneC+'/'+keys.length+'</span>';
     el.appendChild(secHd);
-
-    // Stores
     var sec=document.createElement('div');
-    sec.style.cssText='margin:0 14px 6px;background:var(--sf);border-radius:10px;border:1px solid '+color+'33;overflow:hidden;';
+    sec.style.cssText='margin:0 14px 6px;background:var(--sf);border-radius:9px;border:.5px solid '+color+'33;overflow:hidden;';
     keys.forEach(function(k,si){
-      var s=storeMap[k];
-      var st=getStatus(k);
-      var isDone=st==='done';
-      var prodTxt=s.prods.slice(0,2).map(function(r){
-        var note=String(r.ghiChuSP||'');
-        var m2=note.match(/con\s*(\d+)n/i);
-        return (r.sanPham||'')+(m2?' (con '+m2[1]+'n)':'');
-      }).join(' · ');
-      var isGap=s.prods.some(function(r){
-        var m3=String(r.ghiChuSP||'').match(/con\s*(\d+)n/i);
-        return r.lyDo==='date'&&m3&&parseInt(m3[1])<=2;
-      });
-      var isOrder=s.prods.some(function(r){return r.lyDo==='order';});
+      var s=stMap[k];var st=getStatus(k);var isDone=st==='done';
+      var isGap=!isDone&&s.prods.some(function(r){var m=String(r.ghiChuSP||'').match(/con\s*(\d+)n/i);return r.lyDo==='date'&&m&&parseInt(m[1])<=2;});
+      var isOrder=!isDone&&s.prods.some(function(r){return r.lyDo==='order';});
       var row=document.createElement('div');
-      row.style.cssText='display:flex;align-items:center;gap:9px;padding:9px 12px;border-bottom:.5px solid var(--bd);'+(isDone?'opacity:.45;':'');
-      if(si===keys.length-1)row.style.borderBottom='none';
-      var numEl=document.createElement('div');
-      numEl.style.cssText='width:22px;height:22px;border-radius:50%;background:'+(isDone?'#888':color)+';color:#fff;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;';
-      numEl.textContent=isDone?'✓':(si+1);
+      row.style.cssText='display:flex;align-items:center;gap:8px;padding:8px 11px;border-top:.5px solid var(--bd);'+(isDone?'opacity:.45;':'');
+      if(!si)row.style.borderTop='none';
+      var num=document.createElement('div');
+      num.style.cssText='width:20px;height:20px;border-radius:50%;background:'+(isDone?'#888':isGap?'var(--re)':isOrder?'#1976d2':color)+';color:#fff;font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;';
+      num.textContent=isDone?'✓':(si+1);
       var info=document.createElement('div');info.style.cssText='flex:1;min-width:0;';
-      info.innerHTML='<div style="font-size:13px;font-weight:700;color:var(--tx);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+esc(s.tenCH)+'</div>'+
-        '<div style="font-size:10px;color:var(--mu);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+esc(prodTxt)+'</div>';
-      var tagEl=document.createElement('span');
-      tagEl.style.cssText='font-size:9px;font-weight:700;padding:2px 7px;border-radius:7px;flex-shrink:0;background:'+(isDone?'var(--bg)':isGap?'var(--reb)':isOrder?'#dbeafe':'var(--amb)')+';color:'+(isDone?'var(--mu)':isGap?'var(--re)':isOrder?'#1e40af':'var(--am)')+';';
-      tagEl.textContent=isDone?'Xong':isGap?'Gap!':isOrder?'Don':'Sap';
-      row.appendChild(numEl);row.appendChild(info);row.appendChild(tagEl);
-      if(s.mapUrl){
-        var ml=document.createElement('a');ml.href=s.mapUrl;ml.target='_blank';
-        ml.style.cssText='padding:5px 9px;border-radius:7px;background:var(--blb);color:var(--bl);font-size:10px;font-weight:700;text-decoration:none;flex-shrink:0;';
-        ml.textContent='Map';row.appendChild(ml);
-      }
+      var prodTxt=s.prods.slice(0,2).map(function(r){return r.sanPham||'';}).join(' · ');
+      info.innerHTML='<div style="font-size:12px;font-weight:700;color:var(--tx);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+esc(s.tenCH)+'</div>'+
+        '<div style="font-size:10px;color:var(--mu);">'+esc(prodTxt)+'</div>';
+      var tag=document.createElement('span');
+      tag.style.cssText='font-size:9px;font-weight:700;padding:2px 6px;border-radius:6px;flex-shrink:0;background:'+(isDone?'var(--bg)':isGap?'var(--reb)':isOrder?'#dbeafe':'var(--amb)')+';color:'+(isDone?'var(--mu)':isGap?'var(--re)':isOrder?'#1e40af':'var(--am)')+';';
+      tag.textContent=isDone?'Xong':isGap?'Gap!':isOrder?'Don':'Sap';
+      row.appendChild(num);row.appendChild(info);row.appendChild(tag);
+      if(s.mapUrl){var ml=document.createElement('a');ml.href=s.mapUrl;ml.target='_blank';ml.style.cssText='padding:4px 7px;border-radius:6px;background:var(--blb);color:var(--bl);font-size:9px;font-weight:700;text-decoration:none;';ml.textContent='Map';row.appendChild(ml);}
       sec.appendChild(row);
     });
     el.appendChild(sec);
@@ -1324,7 +1471,7 @@ function renderSavedRoutes(){
     s.style.background=i<savedRoutes.length?ROUTE_COLORS[i]:'var(--bd2)';
     slotBar.appendChild(s);
   }
-  var lbl=document.createElement('span');lbl.className='slot-lbl';lbl.textContent='Da luu '+savedRoutes.length+'/5 tuyen';
+  var lbl=document.createElement('span');lbl.className='slot-lbl';lbl.textContent='Da luu '+savedRoutes.length+'/20 tuyen';
   slotBar.appendChild(lbl);
   el.appendChild(slotBar);
 
@@ -1369,7 +1516,7 @@ function renderSavedRoutes(){
     el.appendChild(card);
   });
 
-  if(savedRoutes.length<5){
+  if(savedRoutes.length<20){
     var addCard=document.createElement('div');addCard.className='add-tuyen';
     addCard.onclick=function(){openCreateRoute();};
     addCard.innerHTML=
@@ -1437,7 +1584,7 @@ function saveCurrentRoute(){
   var route={name:name,stores:stores,createdAt:todayStr()};
   if(editRouteIdx>=0)savedRoutes[editRouteIdx]=route;
   else savedRoutes.push(route);
-  if(savedRoutes.length>5)savedRoutes=savedRoutes.slice(0,5);
+  if(savedRoutes.length>20)savedRoutes=savedRoutes.slice(0,20);
   sv('gh_saved_routes',savedRoutes);
   closeCreateRoute();
   renderSavedRoutes();
