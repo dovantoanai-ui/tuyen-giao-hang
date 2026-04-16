@@ -200,7 +200,7 @@ body{font-family:'Be Vietnam Pro',sans-serif;background:var(--bg);color:var(--tx
 .add-tuyen{border-radius:13px;border:1.5px dashed var(--bd2);padding:16px;text-align:center;cursor:pointer;margin:0 14px 12px;}
 .add-tuyen-ico{width:36px;height:36px;border-radius:50%;background:var(--bg);display:flex;align-items:center;justify-content:center;margin:0 auto 7px;}
 /* MODAL */
-.modal-overlay{display:none;position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.5);z-index:200;align-items:flex-end;}
+.modal-overlay{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.5);z-index:200;align-items:flex-end;}
 .modal-overlay.on{display:flex;}
 .modal-box{background:var(--sf);border-radius:16px 16px 0 0;padding:0 0 30px;width:100%;max-height:85vh;overflow-y:auto;}
 .modal-hd{display:flex;align-items:center;padding:14px 16px;border-bottom:1px solid var(--bd);}
@@ -1357,7 +1357,7 @@ function computeSmartRoute(){
     var type=isDone?'done':isGap?'gap':isOrder?'order':'sap';
 
     var shortName=s.tenCH.length>10?s.tenCH.slice(0,9)+'…':s.tenCH;
-    pts.push({name:shortName,x:px,y:py,t:type,idx:i+1,k:k,mapUrl:s.mapUrl});
+    pts.push({name:shortName,x:px,y:py,t:type,idx:i+1,k:k,mapUrl:s.mapUrl,quan:q});
   });
 
   // == BAN DO AUTO-FIT + ZOOM ==
