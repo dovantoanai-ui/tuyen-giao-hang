@@ -346,7 +346,20 @@ body{font-family:'Be Vietnam Pro',sans-serif;background:var(--bg);color:var(--tx
 <div class="sc" id="s-route">
   <div class="tb">
     <div style="flex:1"><div class="tb-ttl" id="routeTtl">Tuyen duong thong minh</div><div class="tb-sub" id="routeSub">Hom nay</div></div>
-    <button class="tb-btn light" onclick="computeSmartRoute()">Tinh lai</button>
+    <button class="tb-btn light" onclick="rtSelState={};rtSelOrder=[];computeSmartRoute()">Tinh lai</button>
+  </div>
+  <!-- Status bar chon diem -->
+  <div style="display:flex;align-items:center;gap:8px;padding:7px 14px;background:var(--sf);border-bottom:1px solid var(--bd);">
+    <div style="font-size:11px;color:var(--mu);flex:1;" id="routeSelStatus">Cham vao cua hang de chon diem giao</div>
+    <button onclick="rtSelState={};rtSelOrder=[];if(typeof drawSimpleMap==='function')drawSimpleMap();" style="font-size:11px;padding:4px 10px;border-radius:7px;border:0.5px solid var(--bd2);background:var(--bg);color:var(--mu);cursor:pointer;">Dat lai</button>
+  </div>
+  <!-- Legend -->
+  <div style="display:flex;gap:10px;padding:6px 14px;background:var(--sf);border-bottom:1px solid var(--bd);flex-wrap:wrap;">
+    <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--mu);"><div style="width:8px;height:8px;border-radius:50%;background:#1976d2;"></div>Chua chon</div>
+    <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--mu);"><div style="width:8px;height:8px;border-radius:50%;background:#e8703a;"></div>Trong tuyen</div>
+    <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--mu);"><div style="width:8px;height:8px;border-radius:50%;background:#16a34a;"></div>Da giao</div>
+    <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--mu);"><div style="width:18px;height:2px;background:#e8703a;border-radius:2px;"></div>Chua giao</div>
+    <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--mu);"><div style="width:18px;height:2px;background:#16a34a;border-radius:2px;border-bottom:2px dashed #16a34a;"></div>Da giao</div>
   </div>
   <div id="routeContent" style="padding-bottom:8px;"></div>
 </div>
@@ -1366,6 +1379,9 @@ function computeSmartRoute(){
 
   // == BAN DO AUTO-FIT + ZOOM ==
   var vpState={minX:0,maxX:1,minY:0,maxY:1};
+  // Trang thai chon diem: rtSelState[ptIndex]=0/1/2, rtSelOrder=thu tu chon
+  var rtSelState={};
+  var rtSelOrder=[];
 
   function fitViewport(){
     if(pts.length<2){vpState={minX:0,maxX:1,minY:0,maxY:1};return;}
@@ -1404,22 +1420,22 @@ function computeSmartRoute(){
     // Nen
     ctx.fillStyle='#eef4ea'; ctx.fillRect(0,0,W,H);
 
-    // Ve vung quan - hinh chu nhat, vien mau nhat
+    // Ve vung quan - hinh chu nhat, vien mau ro
     var QUAN_ZONES=[
-      {n:'Tay Ho',      x:.38,y:.02,w:.30,h:.18, fill:'rgba(8,145,178,.10)',   border:'rgba(8,145,178,.38)'},
-      {n:'Bac TU Liem', x:.05,y:.03,w:.25,h:.16, fill:'rgba(124,58,237,.10)',  border:'rgba(124,58,237,.35)'},
-      {n:'Long Bien',   x:.76,y:.10,w:.22,h:.22, fill:'rgba(217,119,6,.10)',   border:'rgba(217,119,6,.35)'},
-      {n:'Cau Giay',    x:.10,y:.20,w:.28,h:.22, fill:'rgba(25,118,210,.10)',  border:'rgba(25,118,210,.38)'},
-      {n:'Ba Dinh',     x:.40,y:.16,w:.22,h:.18, fill:'rgba(220,38,38,.08)',   border:'rgba(220,38,38,.30)'},
-      {n:'Hoan Kiem',   x:.63,y:.26,w:.16,h:.16, fill:'rgba(234,88,12,.08)',   border:'rgba(234,88,12,.30)'},
-      {n:'Dong Da',     x:.38,y:.34,w:.24,h:.20, fill:'rgba(5,150,105,.10)',   border:'rgba(5,150,105,.32)'},
-      {n:'Hai Ba Trung',x:.63,y:.34,w:.22,h:.20, fill:'rgba(239,68,68,.09)',   border:'rgba(239,68,68,.32)'},
-      {n:'Nam TU Liem', x:.05,y:.32,w:.24,h:.18, fill:'rgba(126,34,206,.09)',  border:'rgba(126,34,206,.30)'},
-      {n:'Nam TL',      x:.05,y:.46,w:.24,h:.22, fill:'rgba(26,107,53,.10)',   border:'rgba(26,107,53,.32)'},
-      {n:'Thanh Xuan',  x:.32,y:.52,w:.28,h:.18, fill:'rgba(217,119,6,.10)',   border:'rgba(217,119,6,.32)'},
-      {n:'Ha Dong',     x:.05,y:.65,w:.26,h:.20, fill:'rgba(124,58,237,.09)',  border:'rgba(124,58,237,.30)'},
-      {n:'Hoang Mai',   x:.56,y:.56,w:.26,h:.20, fill:'rgba(220,38,38,.09)',   border:'rgba(220,38,38,.30)'},
-      {n:'Gia Lam',     x:.76,y:.32,w:.22,h:.22, fill:'rgba(8,145,178,.09)',   border:'rgba(8,145,178,.30)'},
+      {n:'Tây Hồ',      x:.38,y:.02,w:.30,h:.18, fill:'rgba(8,145,178,.18)',   border:'rgba(8,145,178,.65)'},
+      {n:'Bắc TL',      x:.05,y:.03,w:.25,h:.16, fill:'rgba(124,58,237,.16)',  border:'rgba(124,58,237,.60)'},
+      {n:'Long Biên',   x:.76,y:.10,w:.22,h:.22, fill:'rgba(217,119,6,.18)',   border:'rgba(217,119,6,.62)'},
+      {n:'Cầu Giấy',    x:.10,y:.20,w:.28,h:.22, fill:'rgba(25,118,210,.18)',  border:'rgba(25,118,210,.65)'},
+      {n:'Ba Đình',     x:.40,y:.16,w:.22,h:.18, fill:'rgba(220,38,38,.14)',   border:'rgba(220,38,38,.58)'},
+      {n:'Hoàn Kiếm',   x:.63,y:.26,w:.16,h:.16, fill:'rgba(234,88,12,.14)',   border:'rgba(234,88,12,.58)'},
+      {n:'Đống Đa',     x:.38,y:.34,w:.24,h:.20, fill:'rgba(5,150,105,.18)',   border:'rgba(5,150,105,.60)'},
+      {n:'HBTrưng',     x:.63,y:.34,w:.22,h:.20, fill:'rgba(239,68,68,.16)',   border:'rgba(239,68,68,.60)'},
+      {n:'Nam TL',      x:.05,y:.32,w:.24,h:.18, fill:'rgba(126,34,206,.16)',  border:'rgba(126,34,206,.58)'},
+      {n:'Nam TL',      x:.05,y:.46,w:.24,h:.22, fill:'rgba(26,107,53,.18)',   border:'rgba(26,107,53,.60)'},
+      {n:'Thanh Xuân',  x:.32,y:.52,w:.28,h:.18, fill:'rgba(217,119,6,.18)',   border:'rgba(217,119,6,.60)'},
+      {n:'Hà Đông',     x:.05,y:.65,w:.26,h:.20, fill:'rgba(124,58,237,.16)',  border:'rgba(124,58,237,.58)'},
+      {n:'Hoàng Mai',   x:.56,y:.56,w:.26,h:.20, fill:'rgba(220,38,38,.16)',   border:'rgba(220,38,38,.58)'},
+      {n:'Gia Lâm',     x:.76,y:.32,w:.22,h:.22, fill:'rgba(8,145,178,.16)',   border:'rgba(8,145,178,.58)'},
     ];
 
     // Match quan cua hang voi zone
@@ -1452,102 +1468,105 @@ function computeSmartRoute(){
 
     QUAN_ZONES.forEach(function(z){
       var hasStore=matchQuan(z.n);
-      // Chuyen toa do world -> screen
       var sx2=(z.x-vpState.minX)/rx2*W;
       var sy2=(z.y-vpState.minY)/ry2*H;
       var sw=z.w/rx2*W;
       var sh=z.h/ry2*H;
-      if(sw<8||sh<8)return;
+      if(sw<6||sh<6)return;
 
       roundRect(ctx,sx2,sy2,sw,sh,5);
-      ctx.fillStyle=hasStore?z.fill:'rgba(200,215,200,.04)';ctx.fill();
-      ctx.strokeStyle=hasStore?z.border:'rgba(180,200,180,.15)';
-      ctx.lineWidth=hasStore?1.2:0.5;ctx.stroke();
+      ctx.fillStyle=hasStore?z.fill:'rgba(200,215,200,.07)';ctx.fill();
+      ctx.strokeStyle=hasStore?z.border:'rgba(160,190,160,.30)';
+      ctx.lineWidth=hasStore?1.8:0.8;ctx.stroke();
 
-      // Ten quan: goc tren trai, nho, mau nhat
-      if(hasStore&&sw>30){
-        var fs=Math.max(8,Math.min(10,Math.round(sw/14)));
+      // Ten quan: luon hien, dam hon khi co cua hang
+      if(sw>20&&sh>14){
+        var fs=Math.max(9,Math.min(11,Math.round(sw/13)));
         ctx.font='bold '+fs+'px sans-serif';
         ctx.textAlign='left';ctx.textBaseline='top';
-        ctx.fillStyle=z.border.replace(/rgba\(([^,]+,[^,]+,[^,]+),[.\d]+\)/,'rgba($1,.75)');
+        ctx.fillStyle=hasStore
+          ? z.border.replace(/rgba\(([^,]+,[^,]+,[^,]+),[.\d]+\)/,'rgba($1,.90)')
+          : 'rgba(120,150,120,.45)';
         ctx.fillText(z.n,sx2+5,sy2+4);
       }
     });
 
-    // Tuyen giao hang - phan biet da giao (xam) vs chua giao (xanh)
-    var allPts=pts.slice().sort(function(a,b){return a.idx-b.idx;});
-    if(allPts.length>1){
-      // Ve tung doan - xam = da giao, xanh = chua giao
-      for(var ri=0;ri<allPts.length-1;ri++){
-        var pa=allPts[ri],pb=allPts[ri+1];
-        var sa=toS(pa.x,pa.y),sb=toS(pb.x,pb.y);
-        var segDone=pa.t==='done'&&pb.t==='done';
-        var segFail=pa.t==='fail'||pb.t==='fail';
-        ctx.beginPath();ctx.moveTo(sa.x,sa.y);ctx.lineTo(sb.x,sb.y);
-        if(segDone){
-          // Doan da giao: duong lien xam nhat
-          ctx.strokeStyle='rgba(120,120,120,.35)';ctx.lineWidth=1.5;ctx.setLineDash([]);
-        } else if(segFail){
-          ctx.strokeStyle='rgba(220,38,38,.3)';ctx.lineWidth=1.5;ctx.setLineDash([4,4]);
+    // == Ve mui ten theo thu tu nguoi giao chon (3 trang thai) ==
+    // rtSel: mang cac {ptIdx, state} theo thu tu chon: state 1=chua giao, 2=da giao
+    if(rtSelOrder.length>0){
+      var prev2=toS(pts[0].x,pts[0].y); // bat dau tu Kho
+      rtSelOrder.forEach(function(si){
+        var p2=pts[si];if(!p2)return;
+        var cur2=toS(p2.x,p2.y);
+        var isDone2=rtSelState[si]===2;
+        // Ve duong
+        ctx.beginPath();ctx.moveTo(prev2.x,prev2.y);ctx.lineTo(cur2.x,cur2.y);
+        if(isDone2){
+          ctx.strokeStyle='rgba(22,163,74,.72)';ctx.lineWidth=2.5;ctx.setLineDash([9,5]);
         } else {
-          // Doan chua giao: xanh dam, net dut dep
-          ctx.strokeStyle='rgba(26,107,53,.7)';ctx.lineWidth=2.5;ctx.setLineDash([9,5]);
+          ctx.strokeStyle='rgba(231,112,58,.88)';ctx.lineWidth=2.5;ctx.setLineDash([]);
         }
         ctx.lineCap='round';ctx.stroke();ctx.setLineDash([]);
-      }
-      // Mui ten huong di tren doan chua giao
-      allPts.forEach(function(p,ri){
-        if(ri===0||p.t==='done')return;
-        var prev=allPts[ri-1];
-        if(prev.t==='done')return;
-        var sa2=toS(prev.x,prev.y),sb2=toS(p.x,p.y);
-        var mx=(sa2.x+sb2.x)/2,my=(sa2.y+sb2.y)/2;
-        var angle=Math.atan2(sb2.y-sa2.y,sb2.x-sa2.x);
-        ctx.save();ctx.translate(mx,my);ctx.rotate(angle);
-        ctx.beginPath();ctx.moveTo(-5,-4);ctx.lineTo(0,0);ctx.lineTo(-5,4);
-        ctx.strokeStyle='rgba(26,107,53,.6)';ctx.lineWidth=1.5;ctx.stroke();
+        // Mui ten o giua doan
+        var mx2=(prev2.x+cur2.x)/2,my2=(prev2.y+cur2.y)/2;
+        var ang3=Math.atan2(cur2.y-prev2.y,cur2.x-prev2.x);
+        ctx.save();ctx.translate(mx2,my2);ctx.rotate(ang3);
+        ctx.beginPath();ctx.moveTo(-6,-4.5);ctx.lineTo(0,0);ctx.lineTo(-6,4.5);
+        ctx.strokeStyle=isDone2?'rgba(22,163,74,.85)':'rgba(231,112,58,.95)';
+        ctx.lineWidth=2;ctx.lineCap='round';ctx.lineJoin='round';ctx.stroke();
         ctx.restore();
+        prev2=cur2;
       });
     }
 
-    // Ve diem
-    pts.forEach(function(p){
+    // Ve diem - 3 trang thai: 0=chua chon(xanh), 1=trong tuyen(cam), 2=da giao(xanh la)
+    pts.forEach(function(p,pi){
       if(!inView(p.x,p.y))return;
       var sp=toS(p.x,p.y);
       var x=sp.x,y=sp.y;
       var isDepot=p.t==='depot';
-      var r=isDepot?10:8;
-      var color={depot:'#1a6b35',order:'#1976d2',gap:'#dc2626',sap:'#d97706',done:'#888'}[p.t]||'#888';
+      // Mau goc theo loai don (cho diem chua chon)
+      var baseColor={depot:'#1a6b35',order:'#1976d2',gap:'#dc2626',sap:'#d97706',done:'#888'}[p.t]||'#1976d2';
+      // Uu tien mau trang thai nguoi giao chon
+      var selSt=isDepot?-1:(rtSelState[pi]||0);
+      var color=isDepot?'#1a6b35':selSt===2?'#16a34a':selSt===1?'#e8703a':baseColor;
+      var r=isDepot?10:(selSt>0?9:7);
 
-      if(p.t==='gap'){
-        ctx.beginPath();ctx.arc(x,y,r+5,0,Math.PI*2);
-        ctx.fillStyle='rgba(220,38,38,.18)';ctx.fill();
-      }
-      ctx.shadowColor='rgba(0,0,0,.25)';ctx.shadowBlur=5;
+      // Gap pulse ring
+      if(p.t==='gap'&&selSt===0){ctx.beginPath();ctx.arc(x,y,r+5,0,Math.PI*2);ctx.fillStyle='rgba(220,38,38,.15)';ctx.fill();}
+      // Vong sang cho diem da chon
+      if(selSt===1){ctx.beginPath();ctx.arc(x,y,r+5,0,Math.PI*2);ctx.fillStyle='rgba(231,112,58,.15)';ctx.fill();}
+      if(selSt===2){ctx.beginPath();ctx.arc(x,y,r+5,0,Math.PI*2);ctx.fillStyle='rgba(22,163,74,.15)';ctx.fill();}
+
+      ctx.shadowColor='rgba(0,0,0,.22)';ctx.shadowBlur=4;
       ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fillStyle=color;ctx.fill();
       ctx.shadowBlur=0;
       ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.stroke();
 
       ctx.fillStyle='#fff';ctx.textAlign='center';ctx.textBaseline='middle';
-      ctx.font='bold '+(isDepot?'6.5':'8.5')+'px sans-serif';
-      if(p.t==='done')ctx.fillText('✓',x,y);
-      else if(isDepot)ctx.fillText('KHO',x,y);
-      else ctx.fillText(p.idx,x,y);
+      ctx.font='bold '+(isDepot?'6.5':'8')+'px sans-serif';
+      if(isDepot){ctx.fillText('KHO',x,y);}
+      else if(selSt===2){ctx.fillText('✓',x,y);}
+      else if(selSt===1){
+        var ri2=rtSelOrder.indexOf(pi);
+        ctx.fillText(ri2+1,x,y);
+      } else {
+        ctx.fillText(p.idx,x,y);
+      }
 
-      // Ten sieu thi
+      // Ten cua hang - luon hien, dam hon khi da chon
       if(!isDepot){
-        ctx.font='9.5px sans-serif';
+        ctx.font=(selSt>0?'bold ':'')+'9px sans-serif';
         var tw=ctx.measureText(p.name).width;
         var preferLeft=x>W*0.65;
-        var tx=preferLeft?x-r-4:x+r+4;
-        var bx=Math.max(2,Math.min(W-tw-6,preferLeft?tx-tw-2:tx-2));
+        var tx2=preferLeft?x-r-4:x+r+4;
+        var bx=Math.max(2,Math.min(W-tw-6,preferLeft?tx2-tw-2:tx2-2));
         var by=Math.max(2,Math.min(H-15,y-7));
-        ctx.fillStyle='rgba(255,255,255,.92)';
+        ctx.fillStyle=selSt>0?'rgba(255,255,255,.95)':'rgba(255,255,255,.82)';
         ctx.fillRect(bx,by,tw+4,14);
-        ctx.strokeStyle=color+'55';ctx.lineWidth=1;ctx.strokeRect(bx,by,tw+4,14);
-        ctx.fillStyle=p.t==='done'?'#aaa':color;
-        ctx.textAlign='left';ctx.textBaseline='middle';
-        ctx.fillText(p.name,bx+2,by+7);
+        if(selSt>0){ctx.strokeStyle=color+'88';ctx.lineWidth=0.8;ctx.strokeRect(bx,by,tw+4,14);}
+        ctx.fillStyle=selSt>0?color:(p.t==='done'?'#aaa':baseColor);
+        ctx.textAlign='left';ctx.textBaseline='middle';ctx.fillText(p.name,bx+2,by+7);
       }
     });
 
@@ -1557,6 +1576,14 @@ function computeSmartRoute(){
     ctx.fillText('B',W/2,9);ctx.fillText('S',W/2,H-9);
     ctx.fillStyle='rgba(0,0,0,.15)';
     ctx.fillText('T',9,H/2);ctx.fillText('D',W-9,H/2);
+    // Status bar
+    var inRt=rtSelOrder.length;
+    var dnRt=rtSelOrder.filter(function(si){return rtSelState[si]===2;}).length;
+    var sbEl=document.getElementById('routeSelStatus');
+    if(sbEl){
+      if(inRt===0){sbEl.textContent='Cham vao cua hang de chon diem giao';}
+      else{sbEl.textContent=inRt+' diem trong tuyen · '+dnRt+' da giao · '+(inRt-dnRt)+' con lai';}
+    }
   }
 
   // Zoom functions
@@ -1752,6 +1779,53 @@ function computeSmartRoute(){
   }
   addMapDrag();
 
+  // == CLICK CHON DIEM (phan biet voi drag) ==
+  var tapStart={x:0,y:0};
+  cvas.addEventListener('mousedown',function(e){tapStart={x:e.clientX,y:e.clientY};});
+  cvas.addEventListener('click',function(e){
+    var dx=e.clientX-tapStart.x,dy=e.clientY-tapStart.y;
+    if(Math.sqrt(dx*dx+dy*dy)>6)return; // keo thi bo qua
+    var rect=cvas.getBoundingClientRect();
+    var mx=e.clientX-rect.left,my=e.clientY-rect.top;
+    var W=cvas.width||360,H=cvas.height||240;
+    var hit=-1,bestD=999;
+    pts.forEach(function(p,pi){
+      if(p.t==='depot')return;
+      var sp=toS(p.x,p.y);
+      var dx2=mx-sp.x,dy2=my-sp.y,d=Math.sqrt(dx2*dx2+dy2*dy2);
+      if(d<20&&d<bestD){bestD=d;hit=pi;}
+    });
+    if(hit<0)return;
+    var cur=rtSelState[hit]||0;
+    if(cur===0){rtSelState[hit]=1;rtSelOrder.push(hit);}
+    else if(cur===1){rtSelState[hit]=2;}
+    else{rtSelState[hit]=0;rtSelOrder=rtSelOrder.filter(function(x){return x!==hit;});}
+    drawSimpleMap();
+  });
+  cvas.addEventListener('touchstart',function(e){if(e.touches.length===1)tapStart={x:e.touches[0].clientX,y:e.touches[0].clientY};},{passive:true});
+  cvas.addEventListener('touchend',function(e){
+    if(e.changedTouches.length!==1)return;
+    var t=e.changedTouches[0];
+    var dx=t.clientX-tapStart.x,dy=t.clientY-tapStart.y;
+    if(Math.sqrt(dx*dx+dy*dy)>8)return;
+    var rect=cvas.getBoundingClientRect();
+    var mx=t.clientX-rect.left,my=t.clientY-rect.top;
+    var W=cvas.width||360,H=cvas.height||240;
+    var hit=-1,bestD=999;
+    pts.forEach(function(p,pi){
+      if(p.t==='depot')return;
+      var sp=toS(p.x,p.y);
+      var dx2=mx-sp.x,dy2=my-sp.y,d=Math.sqrt(dx2*dx2+dy2*dy2);
+      if(d<22&&d<bestD){bestD=d;hit=pi;}
+    });
+    if(hit<0)return;
+    var cur=rtSelState[hit]||0;
+    if(cur===0){rtSelState[hit]=1;rtSelOrder.push(hit);}
+    else if(cur===1){rtSelState[hit]=2;}
+    else{rtSelState[hit]=0;rtSelOrder=rtSelOrder.filter(function(x){return x!==hit;});}
+    drawSimpleMap();
+  },{passive:true});
+
   // Toggle danh sach diem
   var listVisible=false;
   var toggleBar=document.createElement('div');
@@ -1850,6 +1924,35 @@ function drawRouteCard(card, route, color){
     cvas.width=W;cvas.height=H;
     var ctx=cvas.getContext('2d');
     ctx.fillStyle='#eef4ea';ctx.fillRect(0,0,W,H);
+    // Ranh gioi quan mini
+    var QZRC=[
+      {n:'Tay Ho',x:.38,y:.01,w:.28,h:.16,c:'rgba(8,145,178,.12)',bc:'rgba(8,145,178,.42)'},
+      {n:'Bac TL',x:.05,y:.02,w:.22,h:.14,c:'rgba(124,58,237,.10)',bc:'rgba(124,58,237,.38)'},
+      {n:'Cau Giay',x:.07,y:.17,w:.27,h:.20,c:'rgba(25,118,210,.11)',bc:'rgba(25,118,210,.40)'},
+      {n:'Ba Dinh',x:.36,y:.15,w:.22,h:.16,c:'rgba(220,38,38,.08)',bc:'rgba(220,38,38,.32)'},
+      {n:'Dong Da',x:.34,y:.31,w:.24,h:.18,c:'rgba(5,150,105,.10)',bc:'rgba(5,150,105,.36)'},
+      {n:'HBT',x:.60,y:.31,w:.22,h:.18,c:'rgba(239,68,68,.08)',bc:'rgba(239,68,68,.32)'},
+      {n:'Nam TL',x:.05,y:.43,w:.22,h:.20,c:'rgba(26,107,53,.10)',bc:'rgba(26,107,53,.36)'},
+      {n:'Thanh Xuan',x:.30,y:.49,w:.26,h:.16,c:'rgba(217,119,6,.10)',bc:'rgba(217,119,6,.36)'},
+      {n:'Ha Dong',x:.05,y:.64,w:.24,h:.18,c:'rgba(124,58,237,.09)',bc:'rgba(124,58,237,.32)'},
+      {n:'Hoang Mai',x:.55,y:.53,w:.24,h:.17,c:'rgba(220,38,38,.08)',bc:'rgba(220,38,38,.30)'},
+    ];
+    function rrRC(c2,x2,y2,w2,h2,r2){
+      c2.beginPath();c2.moveTo(x2+r2,y2);c2.lineTo(x2+w2-r2,y2);c2.arcTo(x2+w2,y2,x2+w2,y2+r2,r2);
+      c2.lineTo(x2+w2,y2+h2-r2);c2.arcTo(x2+w2,y2+h2,x2+w2-r2,y2+h2,r2);
+      c2.lineTo(x2+r2,y2+h2);c2.arcTo(x2,y2+h2,x2,y2+h2-r2,r2);
+      c2.lineTo(x2,y2+r2);c2.arcTo(x2,y2,x2+r2,y2,r2);c2.closePath();
+    }
+    QZRC.forEach(function(z){
+      var sx=z.x*W,sy=z.y*H,sw=z.w*W,sh=z.h*H;
+      if(sw<5||sh<5)return;
+      rrRC(ctx,sx,sy,sw,sh,3);
+      ctx.fillStyle=z.c;ctx.fill();
+      ctx.strokeStyle=z.bc;ctx.lineWidth=0.8;ctx.stroke();
+      if(sw>22){ctx.font='bold 6.5px sans-serif';ctx.textAlign='left';ctx.textBaseline='top';
+        ctx.fillStyle=z.bc.replace(/rgba\(([^,]+,[^,]+,[^,]+),[.\d]+\)/,'rgba($1,.8)');
+        ctx.fillText(z.n,sx+3,sy+2);}
+    });
     var QPOS2={'Tay Ho':{x:.55,y:.12},'Cau Giay':{x:.33,y:.33},'Nam TL':{x:.20,y:.54},
                'Thanh Xuan':{x:.50,y:.61},'Ha Dong':{x:.22,y:.74},'Hoang Mai':{x:.64,y:.70},
                'Ba Dinh':{x:.52,y:.28},'Dong Da':{x:.52,y:.45},'Tay Ho':{x:.55,y:.12},
@@ -1998,6 +2101,39 @@ function drawRoutePreview(){
   cvas.width=W;cvas.height=H;
   var ctx=cvas.getContext('2d');
   ctx.fillStyle='#e0ebd8';ctx.fillRect(0,0,W,H);
+
+  // Ranh gioi quan
+  var QZPRV=[
+    {n:'Tay Ho',    x:.38,y:.01,w:.28,h:.16,c:'rgba(8,145,178,.14)',  bc:'rgba(8,145,178,.50)'},
+    {n:'Bac TL',    x:.05,y:.02,w:.22,h:.14,c:'rgba(124,58,237,.12)', bc:'rgba(124,58,237,.44)'},
+    {n:'Cau Giay',  x:.07,y:.17,w:.27,h:.20,c:'rgba(25,118,210,.13)', bc:'rgba(25,118,210,.48)'},
+    {n:'Ba Dinh',   x:.36,y:.15,w:.22,h:.16,c:'rgba(220,38,38,.09)',  bc:'rgba(220,38,38,.38)'},
+    {n:'Dong Da',   x:.34,y:.31,w:.24,h:.18,c:'rgba(5,150,105,.11)',  bc:'rgba(5,150,105,.42)'},
+    {n:'HBT',       x:.60,y:.31,w:.22,h:.18,c:'rgba(239,68,68,.09)',  bc:'rgba(239,68,68,.36)'},
+    {n:'Nam TL',    x:.05,y:.43,w:.22,h:.20,c:'rgba(26,107,53,.11)',  bc:'rgba(26,107,53,.42)'},
+    {n:'Thanh Xuan',x:.30,y:.49,w:.26,h:.16,c:'rgba(217,119,6,.11)', bc:'rgba(217,119,6,.42)'},
+    {n:'Ha Dong',   x:.05,y:.64,w:.24,h:.18,c:'rgba(124,58,237,.10)',bc:'rgba(124,58,237,.38)'},
+    {n:'Hoang Mai', x:.55,y:.53,w:.24,h:.17,c:'rgba(220,38,38,.09)', bc:'rgba(220,38,38,.36)'},
+  ];
+  function rrPRV(c2,x2,y2,w2,h2,r2){
+    c2.beginPath();c2.moveTo(x2+r2,y2);c2.lineTo(x2+w2-r2,y2);c2.arcTo(x2+w2,y2,x2+w2,y2+r2,r2);
+    c2.lineTo(x2+w2,y2+h2-r2);c2.arcTo(x2+w2,y2+h2,x2+w2-r2,y2+h2,r2);
+    c2.lineTo(x2+r2,y2+h2);c2.arcTo(x2,y2+h2,x2,y2+h2-r2,r2);
+    c2.lineTo(x2,y2+r2);c2.arcTo(x2,y2,x2+r2,y2,r2);c2.closePath();
+  }
+  QZPRV.forEach(function(z){
+    var sx=z.x*W,sy=z.y*H,sw=z.w*W,sh=z.h*H;
+    if(sw<6||sh<6)return;
+    rrPRV(ctx,sx,sy,sw,sh,3);
+    ctx.fillStyle=z.c;ctx.fill();
+    ctx.strokeStyle=z.bc;ctx.lineWidth=1;ctx.stroke();
+    if(sw>28){
+      ctx.font='bold 7px sans-serif';ctx.textAlign='left';ctx.textBaseline='top';
+      ctx.fillStyle=z.bc.replace(/rgba\(([^,]+,[^,]+,[^,]+),[.\d]+\)/,'rgba($1,.85)');
+      ctx.fillText(z.n,sx+3,sy+2);
+    }
+  });
+
   var ordered=routeOrder.map(function(k){return selectedStoresForRoute[k];}).filter(Boolean);
   if(!ordered.length){
     ctx.font='11px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
@@ -2005,39 +2141,38 @@ function drawRoutePreview(){
     ctx.fillText('Chon cua hang de xem lo trinh',W/2,H/2);
     return;
   }
-  var QPOS4={'Tay Ho':{x:.55,y:.12},'Bac TU Liem':{x:.25,y:.15},'Long Bien':{x:.84,y:.30},
-    'Cau Giay':{x:.33,y:.33},'Ba Dinh':{x:.52,y:.28},'Dong Da':{x:.52,y:.45},
-    'Hai Ba Trung':{x:.67,y:.46},'Nam TU Liem':{x:.22,y:.42},'Nam TL':{x:.20,y:.54},
-    'Thanh Xuan':{x:.50,y:.61},'Ha Dong':{x:.22,y:.74},'Hoang Mai':{x:.64,y:.70},
-    'Gia Lam':{x:.86,y:.42},'Hoan Kiem':{x:.60,y:.38}};
-  function getQP4(q){if(!q)return{x:.5,y:.5};for(var k in QPOS4){if(q.toLowerCase().indexOf(k.toLowerCase())>=0)return QPOS4[k];}return{x:.5,y:.5};}
-  var qc4={};
-  var pts4=[{x:.12,y:.88,depot:true,nm:'KHO'}];
+  var QPOS_PRV={'Tay Ho':{x:.55,y:.12},'Bac TU Liem':{x:.25,y:.15},'Bac TL':{x:.42,y:.14},
+    'Long Bien':{x:.84,y:.30},'Cau Giay':{x:.33,y:.33},'Ba Dinh':{x:.52,y:.28},
+    'Hoan Kiem':{x:.60,y:.38},'Dong Da':{x:.52,y:.45},'Hai Ba Trung':{x:.67,y:.46},
+    'Nam TU Liem':{x:.22,y:.42},'Nam TL':{x:.20,y:.54},'Thanh Xuan':{x:.50,y:.61},
+    'Ha Dong':{x:.22,y:.74},'Hoang Mai':{x:.64,y:.70},'Gia Lam':{x:.86,y:.42}};
+  function getQPRV(q){if(!q)return{x:.5,y:.5};for(var k in QPOS_PRV){if(q.toLowerCase().indexOf(k.toLowerCase())>=0)return QPOS_PRV[k];}return{x:.5,y:.5};}
+  var qcP={};
+  var ptsP=[{x:.12,y:.88,depot:true,nm:'KHO'}];
   ordered.forEach(function(s,i){
-    var q=s.quan||'';if(!qc4[q])qc4[q]=0;
-    var b=getQP4(q),ang=qc4[q]*2.399,rad=0.05+Math.floor(qc4[q]/4)*0.04;qc4[q]++;
-    pts4.push({x:Math.max(.04,Math.min(.96,b.x+Math.cos(ang)*rad)),
+    var q=s.quan||'';if(!qcP[q])qcP[q]=0;
+    var b=getQPRV(q),ang=qcP[q]*2.399,rad=0.05+Math.floor(qcP[q]/4)*0.04;qcP[q]++;
+    ptsP.push({x:Math.max(.04,Math.min(.96,b.x+Math.cos(ang)*rad)),
                y:Math.max(.04,Math.min(.96,b.y+Math.sin(ang)*rad*1.1)),
                nm:(s.tenCH||'').slice(0,8),idx:i+1});
   });
-  var xs=pts4.map(function(p){return p.x;}),ys=pts4.map(function(p){return p.y;});
-  var mnX=Math.max(0,Math.min.apply(null,xs)-.12),mxX=Math.min(1,Math.max.apply(null,xs)+.12);
-  var mnY=Math.max(0,Math.min.apply(null,ys)-.12),mxY=Math.min(1,Math.max.apply(null,ys)+.12);
-  function ts4(px,py){return{x:(px-mnX)/(mxX-mnX||.01)*W,y:(py-mnY)/(mxY-mnY||.01)*H};}
-  // Duong noi + mui ten
-  for(var i=0;i<pts4.length-1;i++){
-    var pa=ts4(pts4[i].x,pts4[i].y),pb=ts4(pts4[i+1].x,pts4[i+1].y);
-    ctx.beginPath();ctx.moveTo(pa.x,pa.y);ctx.lineTo(pb.x,pb.y);
-    ctx.strokeStyle='rgba(26,107,53,.65)';ctx.lineWidth=1.8;ctx.setLineDash([7,4]);ctx.lineCap='round';ctx.stroke();ctx.setLineDash([]);
-    var mx=(pa.x+pb.x)/2,my=(pa.y+pb.y)/2,ang2=Math.atan2(pb.y-pa.y,pb.x-pa.x);
-    ctx.save();ctx.translate(mx,my);ctx.rotate(ang2);
-    ctx.beginPath();ctx.moveTo(-5,-4);ctx.lineTo(0,0);ctx.lineTo(-5,4);
-    ctx.strokeStyle='rgba(26,107,53,.85)';ctx.lineWidth=1.5;ctx.lineCap='round';ctx.lineJoin='round';ctx.stroke();
+  var xsP=ptsP.map(function(p){return p.x;}),ysP=ptsP.map(function(p){return p.y;});
+  var mnXP=Math.max(0,Math.min.apply(null,xsP)-.12),mxXP=Math.min(1,Math.max.apply(null,xsP)+.12);
+  var mnYP=Math.max(0,Math.min.apply(null,ysP)-.12),mxYP=Math.min(1,Math.max.apply(null,ysP)+.12);
+  function tsP(px,py){return{x:(px-mnXP)/(mxXP-mnXP||.01)*W,y:(py-mnYP)/(mxYP-mnYP||.01)*H};}
+  // Duong noi + mui ten cam
+  for(var iP=0;iP<ptsP.length-1;iP++){
+    var paP=tsP(ptsP[iP].x,ptsP[iP].y),pbP=tsP(ptsP[iP+1].x,ptsP[iP+1].y);
+    ctx.beginPath();ctx.moveTo(paP.x,paP.y);ctx.lineTo(pbP.x,pbP.y);
+    ctx.strokeStyle='rgba(231,112,58,.8)';ctx.lineWidth=2;ctx.setLineDash([]);ctx.lineCap='round';ctx.stroke();
+    var mxP=(paP.x+pbP.x)/2,myP=(paP.y+pbP.y)/2,angP=Math.atan2(pbP.y-paP.y,pbP.x-paP.x);
+    ctx.save();ctx.translate(mxP,myP);ctx.rotate(angP);
+    ctx.beginPath();ctx.moveTo(-5,-3.5);ctx.lineTo(0,0);ctx.lineTo(-5,3.5);
+    ctx.strokeStyle='rgba(231,112,58,.9)';ctx.lineWidth=1.5;ctx.lineCap='round';ctx.lineJoin='round';ctx.stroke();
     ctx.restore();
   }
-  // Ve diem
-  pts4.forEach(function(p){
-    var sp=ts4(p.x,p.y),r=p.depot?7:6,color=p.depot?'#1a6b35':'#1976d2';
+  ptsP.forEach(function(p){
+    var sp=tsP(p.x,p.y),r=p.depot?7:6,color=p.depot?'#1a6b35':'#e8703a';
     ctx.beginPath();ctx.arc(sp.x,sp.y,r,0,Math.PI*2);ctx.fillStyle=color;ctx.fill();
     ctx.strokeStyle='#fff';ctx.lineWidth=1.5;ctx.stroke();
     ctx.font='bold '+(p.depot?'6':'7.5')+'px sans-serif';
@@ -2049,92 +2184,6 @@ function drawRoutePreview(){
       var bx=Math.max(1,Math.min(W-tw-3,preferLeft?sp.x-r-tw-4:sp.x+r+1));
       ctx.fillStyle='rgba(255,255,255,.88)';ctx.fillRect(bx,sp.y-5,tw+2,10);
       ctx.fillStyle=color;ctx.textAlign='left';ctx.textBaseline='middle';ctx.fillText(p.nm,bx+1,sp.y);
-    }
-  });
-}
-
-function drawRoutePreview(){
-  var cvas=document.getElementById('routePreviewCanvas');
-  var wrap=document.getElementById('routePreviewMap');
-  if(!cvas||!wrap)return;
-  var W=wrap.offsetWidth||300,H=160;
-  cvas.width=W;cvas.height=H;
-  var ctx=cvas.getContext('2d');
-  ctx.fillStyle='#e0ebd8';ctx.fillRect(0,0,W,H);
-
-  // Lay cac diem da chon theo thu tu
-  var ordered=routeOrder.map(function(k){return selectedStoresForRoute[k];}).filter(Boolean);
-  if(!ordered.length){
-    ctx.font='11px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
-    ctx.fillStyle='rgba(0,0,0,.25)';
-    ctx.fillText('Chon cua hang de xem lo trinh',W/2,H/2);
-    return;
-  }
-
-  // Map quan -> toa do (dung QUAN_POS tu computeSmartRoute)
-  var QPOS3={'Tay Ho':{x:.55,y:.12},'Bac TU Liem':{x:.25,y:.15},'Bac TL':{x:.42,y:.14},
-    'Long Bien':{x:.84,y:.30},'Cau Giay':{x:.33,y:.33},'Ba Dinh':{x:.52,y:.28},
-    'Hoan Kiem':{x:.60,y:.38},'Dong Da':{x:.52,y:.45},'Hai Ba Trung':{x:.67,y:.46},
-    'Nam TU Liem':{x:.22,y:.42},'Nam TL':{x:.20,y:.54},'Thanh Xuan':{x:.50,y:.61},
-    'Ha Dong':{x:.22,y:.74},'Hoang Mai':{x:.64,y:.70},'Gia Lam':{x:.86,y:.42}};
-  function getQP(q){
-    if(!q)return{x:.5,y:.5};
-    for(var k in QPOS3){if(q.toLowerCase().indexOf(k.toLowerCase())>=0)return QPOS3[k];}
-    return{x:.5,y:.5};
-  }
-  var qc3={};
-  var pts3=[{x:.12,y:.88,depot:true,nm:'KHO'}];
-  ordered.forEach(function(s){
-    var q=s.quan||'';if(!qc3[q])qc3[q]=0;
-    var b=getQP(q);
-    var ang=qc3[q]*2.399,rad=0.05+Math.floor(qc3[q]/4)*0.04;
-    qc3[q]++;
-    pts3.push({x:Math.max(.04,Math.min(.96,b.x+Math.cos(ang)*rad)),
-               y:Math.max(.04,Math.min(.96,b.y+Math.sin(ang)*rad*1.1)),
-               nm:(s.tenCH||'').slice(0,8)});
-  });
-
-  // Fit viewport
-  var xs=pts3.map(function(p){return p.x;}),ys=pts3.map(function(p){return p.y;});
-  var mnX=Math.max(0,Math.min.apply(null,xs)-.12),mxX=Math.min(1,Math.max.apply(null,xs)+.12);
-  var mnY=Math.max(0,Math.min.apply(null,ys)-.12),mxY=Math.min(1,Math.max.apply(null,ys)+.12);
-  function ts3(px,py){return{x:(px-mnX)/(mxX-mnX||.01)*W,y:(py-mnY)/(mxY-mnY||.01)*H};}
-
-  // Duong noi va mui ten
-  for(var i=0;i<pts3.length-1;i++){
-    var pa=ts3(pts3[i].x,pts3[i].y);
-    var pb=ts3(pts3[i+1].x,pts3[i+1].y);
-    // Duong noi
-    ctx.beginPath();ctx.moveTo(pa.x,pa.y);ctx.lineTo(pb.x,pb.y);
-    ctx.strokeStyle='rgba(26,107,53,.65)';ctx.lineWidth=1.8;ctx.setLineDash([7,4]);ctx.lineCap='round';ctx.stroke();ctx.setLineDash([]);
-    // Mui ten o giua doan
-    var mx=(pa.x+pb.x)/2,my=(pa.y+pb.y)/2;
-    var ang2=Math.atan2(pb.y-pa.y,pb.x-pa.x);
-    ctx.save();ctx.translate(mx,my);ctx.rotate(ang2);
-    ctx.beginPath();ctx.moveTo(-5,-4);ctx.lineTo(0,0);ctx.lineTo(-5,4);
-    ctx.strokeStyle='rgba(26,107,53,.8)';ctx.lineWidth=1.5;ctx.lineCap='round';ctx.lineJoin='round';ctx.stroke();
-    ctx.restore();
-  }
-
-  // Ve cac diem
-  pts3.forEach(function(p,i){
-    var sp=ts3(p.x,p.y);
-    var r=p.depot?7:6;
-    var color=p.depot?'#1a6b35':'#1976d2';
-    ctx.beginPath();ctx.arc(sp.x,sp.y,r,0,Math.PI*2);ctx.fillStyle=color;ctx.fill();
-    ctx.strokeStyle='#fff';ctx.lineWidth=1.5;ctx.stroke();
-    ctx.font='bold '+(p.depot?'6':'7')+'px sans-serif';
-    ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillStyle='#fff';
-    if(p.depot)ctx.fillText('K',sp.x,sp.y);else ctx.fillText(i,sp.x,sp.y);
-    // Ten
-    if(p.nm){
-      ctx.font='8px sans-serif';
-      var tw2=ctx.measureText(p.nm).width;
-      var preferLeft=sp.x>W*.65;
-      var tx2=preferLeft?sp.x-r-3:sp.x+r+3;
-      var bx2=Math.max(1,Math.min(W-tw2-3,preferLeft?tx2-tw2-1:tx2-1));
-      ctx.fillStyle='rgba(255,255,255,.88)';ctx.fillRect(bx2,sp.y-5,tw2+2,10);
-      ctx.fillStyle=color;ctx.textAlign='left';ctx.textBaseline='middle';ctx.fillText(p.nm,bx2+1,sp.y);
     }
   });
 }
