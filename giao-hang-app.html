@@ -7,6 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>Giao Hang - NemThanh</title>
 <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <style>
 :root{
   --gr:#1a6b35;--grd:#145228;--grb:#e8f5ee;--grl:#b8d9c4;
@@ -115,7 +116,16 @@ body{font-family:'Be Vietnam Pro',sans-serif;background:var(--bg);color:var(--tx
 /* EMPTY */
 .empty{text-align:center;padding:50px 24px;}
 
-/* BLINK URGENT */
+/* LEAFLET OVERRIDES */
+.leaflet-container{font-family:'Be Vietnam Pro',sans-serif;}
+.leaflet-control-zoom{box-shadow:0 2px 8px rgba(0,0,0,.15)!important;}
+.leaflet-top{z-index:50!important;}
+.lf-popup-inner{font-family:'Be Vietnam Pro',sans-serif;min-width:160px;}
+.lf-popup-inner .lf-name{font-size:13px;font-weight:700;margin-bottom:3px;color:#1c1917;}
+.lf-popup-inner .lf-area{font-size:11px;color:#78716c;margin-bottom:5px;}
+.lf-popup-inner .lf-tag{font-size:10px;font-weight:700;padding:2px 8px;border-radius:7px;display:inline-block;margin-bottom:5px;}
+.lf-popup-inner .lf-prods{font-size:10px;color:#57534e;line-height:1.5;}
+.lf-popup-inner .lf-hint{font-size:10px;color:#a8a29e;margin-top:5px;}
 @keyframes blinkCard{0%,100%{border-color:var(--re);}50%{border-color:transparent;}}
 @keyframes blinkAmber{0%,100%{border-color:#d97706;}50%{border-color:transparent;}}
 .vd-urgent{animation:blinkCard 1s infinite;border-left:3px solid var(--re) !important;background:#fff9f9 !important;}
@@ -286,22 +296,8 @@ body{font-family:'Be Vietnam Pro',sans-serif;background:var(--bg);color:var(--tx
     <div style="background:var(--sf);padding:9px 4px;text-align:center;"><div style="font-size:16px;font-weight:800;color:var(--am);" id="mapCntS">0</div><div style="font-size:9px;color:var(--mu);">Sap</div></div>
     <div style="background:var(--sf);padding:9px 4px;text-align:center;"><div style="font-size:16px;font-weight:800;color:#16a34a;" id="mapCntD">0</div><div style="font-size:9px;color:var(--mu);">Da giao</div></div>
   </div>
-  <!-- Canvas map -->
-  <div style="position:relative;background:#e8f0e3;" id="mapCanvasWrap">
-    <canvas id="mapCanvas" style="display:block;"></canvas>
-    <!-- Popup -->
-    <div id="mapPopup" style="display:none;position:absolute;background:#fff;border-radius:10px;padding:10px 13px;min-width:150px;max-width:190px;box-shadow:0 4px 18px rgba(0,0,0,.18);z-index:10;pointer-events:none;">
-      <div style="font-size:13px;font-weight:700;color:var(--tx);" id="ppName"></div>
-      <div style="font-size:10px;color:var(--mu);margin-top:2px;" id="ppArea"></div>
-      <div style="margin-top:5px;" id="ppTag"></div>
-      <div style="font-size:10px;color:#57534e;margin-top:4px;line-height:1.5;" id="ppProds"></div>
-    </div>
-    <!-- Zoom -->
-    <div style="position:absolute;top:10px;right:10px;display:flex;flex-direction:column;gap:4px;">
-      <button id="mapZIn" style="width:32px;height:32px;border-radius:8px;border:none;background:rgba(255,255,255,.9);font-size:16px;cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,.12);">+</button>
-      <button id="mapZOut" style="width:32px;height:32px;border-radius:8px;border:none;background:rgba(255,255,255,.9);font-size:16px;cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,.12);">-</button>
-    </div>
-  </div>
+  <!-- Leaflet map -->
+  <div id="leafletMainMap" style="height:320px;z-index:1;"></div>
   <!-- Legend -->
   <div style="display:flex;gap:12px;padding:7px 14px;background:var(--sf);border-top:1px solid var(--bd);flex-wrap:wrap;">
     <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--mu);"><div style="width:9px;height:9px;border-radius:50%;background:#1a6b35;"></div>Kho</div>
@@ -404,6 +400,7 @@ body{font-family:'Be Vietnam Pro',sans-serif;background:var(--bg);color:var(--tx
   <button class="bnav-btn" id="bn-set" onclick="goTab('set')"><span class="bnav-ico">⚙️</span><span>Cai dat</span></button>
 </div>
 
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
 // == STATE ==
 var GS_URL = localStorage.getItem('gh_gs_url') || '';
@@ -883,60 +880,72 @@ function pushStatus(storeKey, status){
   }).catch(function(){});
 }
 
-// == BAN DO ==
-// == STATE BAN DO ==
-var mapStops=[];
-var mapPts=[];
-var mapSelStop=null;
-var mapZoom=1;
-var mapOffX=0.5, mapOffY=0.5; // center relative
+// == BAN DO - LEAFLET ==
+var leafletMain=null;
+var leafletMainLayers=[];
+var mapPts=[]; // giữ cho compatibity với cycleStatus
 
-function getStopType(store, k){
-  var isDone=getStatus(k)==='done';
-  if(isDone) return 'done';
-  // Tim lyDo va so ngay tu deliveries
-  var rows=deliveries.filter(function(r){return (r.tenCH||r.stt)===k;});
-  var hasOrder=rows.some(function(r){return r.lyDo==='order';});
-  var hasDate=rows.some(function(r){return r.lyDo==='date';});
-  var minDays=99;
-  rows.forEach(function(r){
-    var note=String(r.ghiChuSP||'');
-    var m=note.match(/con\s*(\d+)n/i);
-    if(m&&parseInt(m[1])<minDays)minDays=parseInt(m[1]);
-  });
-  if(hasOrder) return 'order';
-  if(hasDate&&minDays<=2) return 'gap';
-  if(hasDate) return 'sap';
-  return 'sap';
-}
-
-function getMapColor(t){
-  return {depot:'#1a6b35',order:'#1976d2',gap:'#dc2626',sap:'#d97706',done:'#16a34a'}[t]||'#888';
-}
-
-// Scatter diem theo vi tri gia lap dua tren quan
-var QUAN_CENTERS={
-  'Cau Giay':    {cx:.35,cy:.38},
-  'Nam TL':      {cx:.22,cy:.60},
-  'Thanh Xuan':  {cx:.58,cy:.72},
-  'Tay Ho':      {cx:.68,cy:.20},
-  'Dong Da':     {cx:.52,cy:.52},
-  'Ba Dinh':     {cx:.50,cy:.32},
-  'Hoan Kiem':   {cx:.58,cy:.42},
-  'Hoang Mai':   {cx:.60,cy:.82},
-  'Ha Dong':     {cx:.18,cy:.82},
-  'Bac TL':      {cx:.45,cy:.18},
-  'Bac TU Liem': {cx:.30,cy:.18},
-  'Nam TU Liem': {cx:.22,cy:.42},
-  'Khac':        {cx:.50,cy:.50},
+// Toa do trung tam cac quan Ha Noi (lat, lng)
+var QUAN_LL={
+  'Tay Ho':     [21.0716,105.8125], 'Bac TU Liem':[21.0629,105.7774],
+  'Bac TL':     [21.0580,105.8050], 'Long Bien':  [21.0408,105.8983],
+  'Cau Giay':   [21.0313,105.7941], 'Ba Dinh':    [21.0358,105.8393],
+  'Hoan Kiem':  [21.0278,105.8528], 'Dong Da':    [21.0245,105.8412],
+  'Hai Ba Trung':[21.0081,105.8570],'Nam TU Liem':[21.0113,105.7557],
+  'Nam TL':     [21.0200,105.7600], 'Thanh Xuan': [20.9940,105.8239],
+  'Ha Dong':    [20.9714,105.7809], 'Hoang Mai':  [20.9799,105.8565],
+  'Gia Lam':    [21.0025,105.9115], 'Khac':       [21.028, 105.854],
 };
-function getQuanCenter(q){
-  if(!q)return {cx:.5,cy:.5};
-  for(var k in QUAN_CENTERS){if(q.toLowerCase().indexOf(k.toLowerCase())>=0)return QUAN_CENTERS[k];}
-  return QUAN_CENTERS['Khac'];
+var DEPOT_LL=[21.038,105.800]; // KHO mac dinh - co the chinh trong cai dat
+
+function getQuanLL(q){
+  if(!q)return QUAN_LL['Khac'];
+  for(var k in QUAN_LL){if(q.toLowerCase().indexOf(k.toLowerCase())>=0)return QUAN_LL[k];}
+  return QUAN_LL['Khac'];
 }
 
-function buildMapStops(){
+function extractLL(url){
+  if(!url)return null;
+  var m=url.match(/[?&]q=(-?\d+\.?\d*),(-?\d+\.?\d*)/);
+  if(m)return[parseFloat(m[1]),parseFloat(m[2])];
+  m=url.match(/@(-?\d+\.?\d*),(-?\d+\.?\d*)/);
+  if(m)return[parseFloat(m[1]),parseFloat(m[2])];
+  m=url.match(/[?&]ll=(-?\d+\.?\d*),(-?\d+\.?\d*)/);
+  if(m)return[parseFloat(m[1]),parseFloat(m[2])];
+  return null;
+}
+
+function strHash(s){var h=0;for(var i=0;i<s.length;i++)h=(Math.imul(31,h)+s.charCodeAt(i))|0;return h;}
+
+function getStoreLL(mapUrl,quan,name){
+  var ll=extractLL(mapUrl);
+  if(ll)return ll;
+  var base=getQuanLL(quan);
+  var h=strHash(name||'');
+  // jitter xac dinh theo ten (0.004 ~ 400m)
+  return[base[0]+((h&0xff)/255-.5)*0.008, base[1]+(((h>>8)&0xff)/255-.5)*0.010];
+}
+
+function makeIcon(color,label,size,ring){
+  size=size||28;
+  var rs=ring?'box-shadow:0 0 0 4px '+ring+',0 2px 8px rgba(0,0,0,.28);':'box-shadow:0 2px 8px rgba(0,0,0,.28);';
+  var fs=Math.round(size*.38);
+  return L.divIcon({
+    className:'',
+    html:'<div style="width:'+size+'px;height:'+size+'px;border-radius:50%;background:'+color+';border:2.5px solid #fff;display:flex;align-items:center;justify-content:center;font:bold '+fs+'px sans-serif;color:#fff;'+rs+'">'+label+'</div>',
+    iconSize:[size,size],iconAnchor:[size/2,size/2],popupAnchor:[0,-(size/2+5)]
+  });
+}
+
+function renderMap(){
+  document.getElementById('mapSub').textContent=(MY_NAME||'')+' · '+
+    deliveries.filter(function(r,i,a){return a.findIndex(function(x){return x.tenCH===r.tenCH;})===i;}).length+' diem hom nay';
+
+  var allStores=deliveries.filter(function(r,i,a){return r.mapUrl&&a.findIndex(function(x){return x.tenCH===r.tenCH;})===i;});
+  document.getElementById('mapAllCnt').textContent=allStores.length;
+  document.getElementById('mapAllBtn').href=buildMapsUrl(allStores);
+
+  // Build store data
   var storeMap={};
   deliveries.forEach(function(r){
     var k=r.tenCH||String(r.stt);
@@ -944,200 +953,87 @@ function buildMapStops(){
     storeMap[k].prods.push(r);
   });
 
-  var stops=[{name:'Kho',x:.12,y:.90,t:'depot',i:0,q:'',p:'',k:'__depot__'}];
-  var quanUsed={};
-  var idx=1;
-
-  Object.keys(storeMap).sort(function(a,b){return (storeMap[a].stt||0)-(storeMap[b].stt||0);}).forEach(function(k){
-    var s=storeMap[k];
-    var q=s.quan||'Khac';
-    var center=getQuanCenter(q);
-    if(!quanUsed[q])quanUsed[q]=0;
-    // Phan tan quanh trung tam quan bang golden angle
-    var angle=quanUsed[q]*2.399+Math.PI/4;
-    var rad=0.04+Math.floor(quanUsed[q]/6)*0.05;
-    quanUsed[q]++;
-    var px=center.cx+Math.cos(angle)*rad;
-    var py=center.cy+Math.sin(angle)*rad*1.2;
-    px=Math.max(0.05,Math.min(0.95,px));
-    py=Math.max(0.05,Math.min(0.95,py));
-
-    var prodTxt=s.prods.map(function(r){
-      var note=String(r.ghiChuSP||'');
-      return (r.sanPham||'')+(note?' ('+note+')':'');
-    }).filter(Boolean).slice(0,2).join(' · ');
-
-    stops.push({name:s.tenCH,x:px,y:py,t:getStopType(s,k),i:idx++,q:q,p:prodTxt,k:k,mapUrl:s.mapUrl});
-  });
-  return stops;
-}
-
-function renderMap(){
-  document.getElementById('mapSub').textContent=(MY_NAME||'')+' · '+
-    deliveries.filter(function(r,i,a){return a.findIndex(function(x){return x.tenCH===r.tenCH;})===i;}).length+' diem hom nay';
-
-  // Update maps btn
-  var allStores=deliveries.filter(function(r,i,a){return r.mapUrl&&a.findIndex(function(x){return x.tenCH===r.tenCH;})===i;});
-  document.getElementById('mapAllCnt').textContent=allStores.length;
-  document.getElementById('mapAllBtn').href=buildMapsUrl(allStores);
-
-  mapStops=buildMapStops();
-
-  // Update stats
+  // Stats
   var cnt={order:0,gap:0,sap:0,done:0};
-  mapStops.forEach(function(s){if(s.t!=='depot'&&cnt[s.t]!==undefined)cnt[s.t]++;});
+  Object.keys(storeMap).forEach(function(k){
+    var t=getStopType(storeMap[k],k);
+    if(cnt[t]!==undefined)cnt[t]++;
+  });
   document.getElementById('mapCntO').textContent=cnt.order;
   document.getElementById('mapCntG').textContent=cnt.gap;
   document.getElementById('mapCntS').textContent=cnt.sap;
   document.getElementById('mapCntD').textContent=cnt.done;
 
-  drawMap();
-}
-
-function drawMap(){
-  var wrap=document.getElementById('mapCanvasWrap');
-  var cvas=document.getElementById('mapCanvas');
-  if(!cvas||!wrap)return;
-  var W=wrap.offsetWidth||360;
-  var H=Math.min(Math.round(W*0.7),320);
-  cvas.width=W; cvas.height=H;
-  var ctx=cvas.getContext('2d');
-
-  function sx(px){return px*W;}
-  function sy(py){return py*H;}
-
-  // Nen dep
-  ctx.fillStyle='#e8f0e3';ctx.fillRect(0,0,W,H);
-
-  // Dot grid
-  ctx.fillStyle='rgba(255,255,255,.45)';
-  for(var gy=0;gy<H;gy+=26){for(var gx=0;gx<W;gx+=26){ctx.beginPath();ctx.arc(gx,gy,1.2,0,Math.PI*2);ctx.fill();}}
-
-  // Duong pho chinh
-  var roads=[[0,.36,1,.35],[0,.6,1,.6],[0,.78,1,.77],[0,.22,1,.21],
-             [.30,0,.31,1],[.50,0,.50,1],[.68,0,.67,1],[.14,0,.15,1]];
-  roads.forEach(function(r){
-    ctx.beginPath();ctx.moveTo(r[0]*W,r[1]*H);ctx.lineTo(r[2]*W,r[3]*H);
-    ctx.strokeStyle='rgba(255,255,255,.85)';ctx.lineWidth=4;ctx.lineCap='round';ctx.stroke();
-    ctx.strokeStyle='rgba(180,210,180,.5)';ctx.lineWidth=1;ctx.stroke();
-  });
-
-  // Quan ellipses
-  var quanAreas=[
-    {n:'Tay Ho',cx:.68,cy:.20,rx:.18,ry:.12,c:'rgba(8,145,178,.09)'},
-    {n:'Cau Giay',cx:.35,cy:.37,rx:.18,ry:.15,c:'rgba(25,118,210,.1)'},
-    {n:'Nam TL',cx:.20,cy:.60,rx:.13,ry:.15,c:'rgba(26,107,53,.1)'},
-    {n:'Thanh Xuan',cx:.60,cy:.73,rx:.15,ry:.12,c:'rgba(217,119,6,.1)'},
-    {n:'Ha Dong',cx:.18,cy:.82,rx:.10,ry:.08,c:'rgba(124,58,237,.08)'},
-    {n:'Dong Da',cx:.52,cy:.52,rx:.10,ry:.10,c:'rgba(220,38,38,.06)'},
-  ];
-  quanAreas.forEach(function(q){
-    ctx.save();ctx.translate(q.cx*W,q.cy*H);
-    ctx.beginPath();ctx.ellipse(0,0,q.rx*W,q.ry*H,0,0,Math.PI*2);
-    ctx.fillStyle=q.c;ctx.fill();ctx.restore();
-    ctx.font='bold 8px sans-serif';ctx.textAlign='center';
-    ctx.fillStyle='rgba(0,0,0,.2)';
-    ctx.fillText(q.n,q.cx*W,q.cy*H+3);
-  });
-
-  // Tuyen duong
-  var route=mapStops.filter(function(s){return s.t!=='done';}).sort(function(a,b){return a.i-b.i;});
-  if(route.length>1){
-    ctx.shadowColor='rgba(26,107,53,.3)';ctx.shadowBlur=6;
-    ctx.beginPath();
-    route.forEach(function(s,i){i===0?ctx.moveTo(sx(s.x),sy(s.y)):ctx.lineTo(sx(s.x),sy(s.y));});
-    ctx.strokeStyle='rgba(26,107,53,.55)';ctx.lineWidth=2;ctx.setLineDash([8,5]);ctx.stroke();
-    ctx.setLineDash([]);ctx.shadowBlur=0;
+  // Init Leaflet lan dau
+  var el=document.getElementById('leafletMainMap');
+  if(!el)return;
+  if(!leafletMain){
+    leafletMain=L.map('leafletMainMap',{zoomControl:true,scrollWheelZoom:false});
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+      attribution:'© <a href="https://openstreetmap.org">OpenStreetMap</a>',maxZoom:19
+    }).addTo(leafletMain);
   }
+  // Xoa markers cu
+  leafletMainLayers.forEach(function(l){l.remove();});
+  leafletMainLayers=[];
 
-  // Ve tung diem
-  mapStops.sort(function(a,b){return a.i-b.i;}).forEach(function(s){
-    var x=sx(s.x),y=sy(s.y);
-    var isDepot=s.t==='depot';
-    var isDone=s.t==='done';
-    var r=isDepot?10:8;
-    var color=getMapColor(s.t);
-    var isSel=mapSelStop&&mapSelStop.i===s.i;
+  var bounds=[DEPOT_LL];
 
-    // Gap pulse ring
-    if(s.t==='gap'){ctx.beginPath();ctx.arc(x,y,r+5,0,Math.PI*2);ctx.fillStyle='rgba(220,38,38,.13)';ctx.fill();}
-    // Sel ring
-    if(isSel){ctx.beginPath();ctx.arc(x,y,r+5,0,Math.PI*2);ctx.strokeStyle=color;ctx.lineWidth=2;ctx.stroke();}
-    // Shadow
-    ctx.shadowColor='rgba(0,0,0,.2)';ctx.shadowBlur=5;
-    // Circle
-    ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fillStyle=color;ctx.fill();
-    ctx.shadowBlur=0;
-    ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.stroke();
-    // Number
-    ctx.fillStyle='#fff';ctx.textAlign='center';ctx.textBaseline='middle';
-    if(isDepot){ctx.font='bold 6px sans-serif';ctx.fillText('KHO',x,y);}
-    else if(isDone){ctx.font='bold 10px sans-serif';ctx.fillText('✓',x,y);}
-    else{ctx.font='bold 9px sans-serif';ctx.fillText(s.i,x,y);}
+  // Marker KHO
+  var depotM=L.marker(DEPOT_LL,{icon:makeIcon('#1a6b35','KHO',36),zIndexOffset:1000})
+    .addTo(leafletMain);
+  depotM.bindPopup('<div class="lf-popup-inner"><div class="lf-name">Kho NemThanh</div><div class="lf-area">Diem xuat phat</div></div>');
+  leafletMainLayers.push(depotM);
 
-    // Ten sieu thi
-    if(!isDepot){
-      var shortN=s.name.length>10?s.name.slice(0,9)+'…':s.name;
-      ctx.font='10px sans-serif';
-      var tw=ctx.measureText(shortN).width;
-      var tx=x>W*0.65?x-r-5:x+r+5;
-      var align=x>W*0.65?'right':'left';
-      var bx=align==='right'?tx-tw:tx;
-      ctx.fillStyle='rgba(255,255,255,.85)';
-      var rectH=13;
-      ctx.rect(bx-2,y-rectH/2,tw+4,rectH);
-      ctx.fill();
-      ctx.fillStyle=isDone?'#aaa':color;
-      ctx.textAlign=align;ctx.textBaseline='middle';
-      ctx.fillText(shortN,tx,y);
-    }
+  // Markers cua hang
+  var idx=1;
+  Object.keys(storeMap).sort(function(a,b){return (storeMap[a].stt||0)-(storeMap[b].stt||0);}).forEach(function(k){
+    var s=storeMap[k];
+    var st=getStatus(k);
+    var t=getStopType(s,k);
+    var color={order:'#1976d2',gap:'#dc2626',sap:'#d97706',done:'#16a34a'}[t]||'#888';
+    var label=st==='done'?'✓':String(idx);
+    var ll=getStoreLL(s.mapUrl,s.quan,s.tenCH);
+    bounds.push(ll);
+
+    var prodTxt=s.prods.slice(0,3).map(function(r){
+      return esc(r.sanPham||'')+(r.ghiChuSP?' <span style="color:#9ca3af;">('+esc(r.ghiChuSP)+')</span>':'');
+    }).join('<br>');
+    var tb={order:'#dbeafe',gap:'#fee2e2',sap:'#fef3c7',done:'#dcfce7'}[t]||'#f4f4f4';
+    var tl={order:'Đơn đặt',gap:'Gấp!',sap:'Sắp hết',done:'Đã giao'}[t]||'';
+
+    var m=L.marker(ll,{icon:makeIcon(color,label,st==='done'?26:28)}).addTo(leafletMain);
+    m.bindPopup(
+      '<div class="lf-popup-inner">'+
+      '<div class="lf-name">'+idx+'. '+esc(s.tenCH)+'</div>'+
+      '<div class="lf-area">'+esc(s.quan)+'</div>'+
+      '<span class="lf-tag" style="background:'+tb+';color:'+color+';">'+tl+'</span>'+
+      '<div class="lf-prods">'+prodTxt+'</div>'+
+      (s.mapUrl?'<a href="'+s.mapUrl+'" target="_blank" style="display:inline-flex;align-items:center;gap:4px;margin-top:6px;padding:5px 10px;border-radius:7px;background:'+color+';color:#fff;font-size:11px;font-weight:700;text-decoration:none;">📍 Dẫn đường</a>':'')+
+      '</div>'
+    );
+    leafletMainLayers.push(m);
+    idx++;
   });
+
+  leafletMain.fitBounds(L.latLngBounds(bounds).pad(0.12));
+  setTimeout(function(){if(leafletMain)leafletMain.invalidateSize();},100);
 }
 
-// Click popup
-(function(){
-  var ready=setInterval(function(){
-    var cvas=document.getElementById('mapCanvas');
-    if(!cvas)return;
-    clearInterval(ready);
-    cvas.addEventListener('click',function(e){
-      var rect=cvas.getBoundingClientRect();
-      var mx=(e.clientX-rect.left), my=(e.clientY-rect.top);
-      var W=cvas.width, H=cvas.height;
-      var hit=null,bestD=999;
-      mapStops.forEach(function(s){
-        var dx=mx-s.x*W, dy=my-s.y*H;
-        var d=Math.sqrt(dx*dx+dy*dy);
-        if(d<18&&d<bestD){bestD=d;hit=s;}
-      });
-      var pop=document.getElementById('mapPopup');
-      if(hit&&hit.t!=='depot'){
-        mapSelStop=hit;
-        var px=hit.x*W+20, py=hit.y*H-20;
-        if(px+200>W)px=hit.x*W-210;
-        if(py<10)py=10;
-        pop.style.left=px+'px';pop.style.top=py+'px';pop.style.display='block';
-        document.getElementById('ppName').textContent=hit.i+'. '+hit.name;
-        document.getElementById('ppArea').textContent=hit.q||'';
-        var tc=getMapColor(hit.t);
-        var tb={order:'#dbeafe',gap:'#fee2e2',sap:'#fef3c7',done:'#dcfce7'}[hit.t]||'#f4f4f4';
-        var tl={order:'Don dat',gap:'Gap!',sap:'Sap het',done:'Da giao'}[hit.t]||'';
-        document.getElementById('ppTag').innerHTML='<span style="display:inline-block;font-size:9px;font-weight:700;padding:2px 8px;border-radius:7px;background:'+tb+';color:'+tc+';">'+tl+'</span>';
-        document.getElementById('ppProds').textContent=hit.p||'';
-      } else {
-        mapSelStop=null;pop.style.display='none';
-      }
-      drawMap();
-    });
-  },100);
-})();
-
-document.addEventListener('DOMContentLoaded',function(){
-  var zIn=document.getElementById('mapZIn');
-  var zOut=document.getElementById('mapZOut');
-  if(zIn)zIn.onclick=function(){mapStops.forEach(function(s){s.x=.5+(s.x-.5)*.78;s.y=.5+(s.y-.5)*.78;});drawMap();};
-  if(zOut)zOut.onclick=function(){mapStops.forEach(function(s){s.x=.5+(s.x-.5)*1.28;s.y=.5+(s.y-.5)*1.28;});drawMap();};
-});
+function getStopType(store,k){
+  var isDone=getStatus(k)==='done';
+  if(isDone)return 'done';
+  var rows=deliveries.filter(function(r){return (r.tenCH||r.stt)===k;});
+  var hasOrder=rows.some(function(r){return r.lyDo==='order';});
+  var hasDate=rows.some(function(r){return r.lyDo==='date';});
+  var minDays=99;
+  rows.forEach(function(r){var note=String(r.ghiChuSP||'');var m=note.match(/con\s*(\d+)n/i);if(m&&parseInt(m[1])<minDays)minDays=parseInt(m[1]);});
+  if(hasOrder)return 'order';
+  if(hasDate&&minDays<=2)return 'gap';
+  if(hasDate)return 'sap';
+  return 'sap';
+}
+function getMapColor(t){return {depot:'#1a6b35',order:'#1976d2',gap:'#dc2626',sap:'#d97706',done:'#16a34a'}[t]||'#888';}
 
 // == SETTINGS ==
 window.onload=function(){
@@ -1309,550 +1205,166 @@ function computeSmartRoute(){
   }
   el.appendChild(mapWrap);
 
-  // == BAN DO GIA LAP - Canvas nhanh ==
+  // == BAN DO LEAFLET - TUYEN ==
   var mapWrap2=document.createElement('div');
-  mapWrap2.style.cssText='position:relative;background:#e8f0e3;margin:0 0 0;';
-  var cvas=document.createElement('canvas');
-  cvas.style.cssText='display:block;width:100%;';
-  mapWrap2.appendChild(cvas);
+  mapWrap2.id='mapCanvasWrap2';
+  mapWrap2.style.cssText='position:relative;';
+  var rtMapDiv=document.createElement('div');
+  rtMapDiv.id='rtLeafletMap';
+  rtMapDiv.style.cssText='height:360px;';
+  mapWrap2.appendChild(rtMapDiv);
   el.appendChild(mapWrap2);
 
-  // Vi tri quan theo la ban do Ha Noi (0-1 normalized, y=0 la bac)
-  var QUAN_POS={
-    'Tay Ho':     {x:.55,y:.12},
-    'Bac TU Liem':{x:.28,y:.15},
-    'Bac TL':     {x:.42,y:.15},
-    'Long Bien':  {x:.78,y:.22},
-    'Cau Giay':   {x:.33,y:.33},
-    'Ba Dinh':    {x:.52,y:.30},
-    'Hoan Kiem':  {x:.58,y:.38},
-    'Dong Da':    {x:.52,y:.44},
-    'Hai Ba Trung':{x:.65,y:.45},
-    'Nam TU Liem':{x:.22,y:.42},
-    'Nam TL':     {x:.20,y:.52},
-    'Thanh Xuan': {x:.50,y:.60},
-    'Ha Dong':    {x:.22,y:.72},
-    'Hoang Mai':  {x:.62,y:.68},
-    'Gia Lam':    {x:.82,y:.40},
-    'Long Bien2': {x:.78,y:.35},
-    'Thuong Tin': {x:.50,y:.88},
-    'Khac':       {x:.50,y:.50},
-  };
-  function getQPos(q){
-    if(!q)return QUAN_POS['Khac'];
-    for(var k in QUAN_POS){
-      if(q.toLowerCase().indexOf(k.toLowerCase())>=0)return QUAN_POS[k];
-    }
-    return QUAN_POS['Khac'];
-  }
-
-  // Tinh toa do tung diem (golden angle scatter trong quan)
-  var quanCount={};
-  var pts=[]; mapPts=pts;
-  // Kho (xuat phat): gan Ba Dinh / Cau Giay
-  pts.push({name:'KHO',x:.38,y:.28,t:'depot',idx:0,k:'__depot__',mapUrl:''});
-
-  allKeys.forEach(function(k,i){
-    var s=stMap[k];
-    var q=s.quan||'Khac';
-    if(!quanCount[q])quanCount[q]=0;
-    var base=getQPos(q);
-    var angle=quanCount[q]*2.399;
-    // Scatter lon hon: base 0.04, tang 0.03 moi vong 5 diem
-    var rad=0.04+Math.floor(quanCount[q]/5)*0.03;
-    quanCount[q]++;
-    var px=Math.max(0.04,Math.min(0.96, base.x+Math.cos(angle)*rad));
-    var py=Math.max(0.04,Math.min(0.96, base.y+Math.sin(angle)*rad*1.15));
-
-    var st=getStatus(k);
-    var isDone=st==='done';
-    var isGap=!isDone&&s.prods.some(function(r){
-      var m=String(r.ghiChuSP||'').match(/con\s*(\d+)n/i);
-      return r.lyDo==='date'&&m&&parseInt(m[1])<=2;
-    });
-    var isOrder=!isDone&&s.prods.some(function(r){return r.lyDo==='order';});
-    var type=isDone?'done':isGap?'gap':isOrder?'order':'sap';
-
-    var shortName=s.tenCH.length>10?s.tenCH.slice(0,9)+'…':s.tenCH;
-    pts.push({name:shortName,x:px,y:py,t:type,idx:i+1,k:k,mapUrl:s.mapUrl,quan:q});
-  });
-
-  // == BAN DO AUTO-FIT + ZOOM ==
-  var vpState={minX:0,maxX:1,minY:0,maxY:1};
-  // Trang thai chon diem: rtSelState[ptIndex]=0/1/2, rtSelOrder=thu tu chon
+  // Leaflet route map state
   var rtSelState={};
   var rtSelOrder=[];
+  var leafletRt=null;
+  var rtMarkerObjs=[]; // {marker, pi, ll}
+  var rtPolylines=[];
 
-  function fitViewport(){
-    if(pts.length<2){vpState={minX:0,maxX:1,minY:0,maxY:1};return;}
-    var pad=0.1;
-    vpState.minX=Math.max(0,Math.min.apply(null,pts.map(function(p){return p.x;}))-pad);
-    vpState.maxX=Math.min(1,Math.max.apply(null,pts.map(function(p){return p.x;}))+pad);
-    vpState.minY=Math.max(0,Math.min.apply(null,pts.map(function(p){return p.y;}))-pad);
-    vpState.maxY=Math.min(1,Math.max.apply(null,pts.map(function(p){return p.y;}))+pad);
-  }
+  function initRtLeaflet(){
+    if(leafletRt){leafletRt.remove();leafletRt=null;}
+    rtMarkerObjs=[];rtPolylines=[];
+    leafletRt=L.map('rtLeafletMap',{zoomControl:true,scrollWheelZoom:false});
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+      attribution:'© <a href="https://openstreetmap.org">OpenStreetMap</a>',maxZoom:19
+    }).addTo(leafletRt);
 
-  function toScreen(px,py,W,H){
-    var rx=vpState.maxX-vpState.minX||0.01;
-    var ry=vpState.maxY-vpState.minY||0.01;
-    return {x:(px-vpState.minX)/rx*W, y:(py-vpState.minY)/ry*H};
-  }
+    // Marker KHO
+    L.marker(DEPOT_LL,{icon:makeIcon('#1a6b35','KHO',36),zIndexOffset:1000})
+      .bindPopup('<div class="lf-popup-inner"><div class="lf-name">Kho NemThanh</div></div>')
+      .addTo(leafletRt);
 
-  function drawSimpleMap(){
-    var wrap=document.getElementById('mapCanvasWrap2');
-    if(!wrap)return;
-    var W=wrap.offsetWidth||360;
-    var H=Math.round(W*0.72);
-    if(W<50)return;
-    cvas.width=W; cvas.height=H;
-    var ctx=cvas.getContext('2d');
+    var bounds=[DEPOT_LL];
 
-    function toS(px,py){
-      var rx=vpState.maxX-vpState.minX||0.01;
-      var ry=vpState.maxY-vpState.minY||0.01;
-      return {x:(px-vpState.minX)/rx*W, y:(py-vpState.minY)/ry*H};
-    }
-    function inView(px,py){
-      return px>=vpState.minX-0.05&&px<=vpState.maxX+0.05&&
-             py>=vpState.minY-0.05&&py<=vpState.maxY+0.05;
-    }
+    // Markers cua hang
+    allKeys.forEach(function(k,i){
+      var s=stMap[k];
+      var st=getStatus(k);
+      var isGap=!isDoneK(k)&&s.prods.some(function(r){var m2=String(r.ghiChuSP||'').match(/con\s*(\d+)n/i);return r.lyDo==='date'&&m2&&parseInt(m2[1])<=2;});
+      var isOrder=!isDoneK(k)&&s.prods.some(function(r){return r.lyDo==='order';});
+      var type=isDoneK(k)?'done':isGap?'gap':isOrder?'order':'sap';
+      var baseColor={order:'#1976d2',gap:'#dc2626',sap:'#d97706',done:'#16a34a'}[type]||'#888';
 
-    // Nen
-    ctx.fillStyle='#eef4ea'; ctx.fillRect(0,0,W,H);
+      var ll=getStoreLL(s.mapUrl,s.quan,s.tenCH);
+      bounds.push(ll);
+      var pi=i+1; // pts index (0=depot)
 
-    // Ve vung quan - hinh chu nhat, vien mau ro
-    var QUAN_ZONES=[
-      {n:'Tây Hồ',      x:.38,y:.02,w:.30,h:.18, fill:'rgba(8,145,178,.18)',   border:'rgba(8,145,178,.65)'},
-      {n:'Bắc TL',      x:.05,y:.03,w:.25,h:.16, fill:'rgba(124,58,237,.16)',  border:'rgba(124,58,237,.60)'},
-      {n:'Long Biên',   x:.76,y:.10,w:.22,h:.22, fill:'rgba(217,119,6,.18)',   border:'rgba(217,119,6,.62)'},
-      {n:'Cầu Giấy',    x:.10,y:.20,w:.28,h:.22, fill:'rgba(25,118,210,.18)',  border:'rgba(25,118,210,.65)'},
-      {n:'Ba Đình',     x:.40,y:.16,w:.22,h:.18, fill:'rgba(220,38,38,.14)',   border:'rgba(220,38,38,.58)'},
-      {n:'Hoàn Kiếm',   x:.63,y:.26,w:.16,h:.16, fill:'rgba(234,88,12,.14)',   border:'rgba(234,88,12,.58)'},
-      {n:'Đống Đa',     x:.38,y:.34,w:.24,h:.20, fill:'rgba(5,150,105,.18)',   border:'rgba(5,150,105,.60)'},
-      {n:'HBTrưng',     x:.63,y:.34,w:.22,h:.20, fill:'rgba(239,68,68,.16)',   border:'rgba(239,68,68,.60)'},
-      {n:'Nam TL',      x:.05,y:.32,w:.24,h:.18, fill:'rgba(126,34,206,.16)',  border:'rgba(126,34,206,.58)'},
-      {n:'Nam TL',      x:.05,y:.46,w:.24,h:.22, fill:'rgba(26,107,53,.18)',   border:'rgba(26,107,53,.60)'},
-      {n:'Thanh Xuân',  x:.32,y:.52,w:.28,h:.18, fill:'rgba(217,119,6,.18)',   border:'rgba(217,119,6,.60)'},
-      {n:'Hà Đông',     x:.05,y:.65,w:.26,h:.20, fill:'rgba(124,58,237,.16)',  border:'rgba(124,58,237,.58)'},
-      {n:'Hoàng Mai',   x:.56,y:.56,w:.26,h:.20, fill:'rgba(220,38,38,.16)',   border:'rgba(220,38,38,.58)'},
-      {n:'Gia Lâm',     x:.76,y:.32,w:.22,h:.22, fill:'rgba(8,145,178,.16)',   border:'rgba(8,145,178,.58)'},
-    ];
+      var selSt=rtSelState[pi]||0;
+      var color=selSt===2?'#16a34a':selSt===1?'#e8703a':baseColor;
+      var lbl=selSt===2?'✓':selSt===1?String(rtSelOrder.indexOf(pi)+1):String(i+1);
 
-    // Match quan cua hang voi zone
-    var activeQuans={};
-    pts.forEach(function(p){if(p.quan)activeQuans[p.quan]=1;});
+      var prodTxt=s.prods.slice(0,3).map(function(r){
+        return esc(r.sanPham||'')+(r.ghiChuSP?' ('+esc(r.ghiChuSP)+')':'');
+      }).join('<br>');
+      var tb={order:'#dbeafe',gap:'#fee2e2',sap:'#fef3c7',done:'#dcfce7'}[type]||'#f4f4f4';
+      var tl={order:'Đơn đặt',gap:'Gấp!',sap:'Sắp hết',done:'Đã giao'}[type]||'';
 
-    function matchQuan(name){
-      for(var k in activeQuans){
-        if(k.toLowerCase().indexOf(name.toLowerCase())>=0||name.toLowerCase().indexOf(k.toLowerCase())>=0)return true;
-      }
-      return false;
-    }
-
-    // Ham ve o chu nhat bo goc
-    function roundRect(ctx2,x2,y2,w2,h2,r2){
-      ctx2.beginPath();
-      ctx2.moveTo(x2+r2,y2);ctx2.lineTo(x2+w2-r2,y2);
-      ctx2.arcTo(x2+w2,y2,x2+w2,y2+r2,r2);
-      ctx2.lineTo(x2+w2,y2+h2-r2);
-      ctx2.arcTo(x2+w2,y2+h2,x2+w2-r2,y2+h2,r2);
-      ctx2.lineTo(x2+r2,y2+h2);
-      ctx2.arcTo(x2,y2+h2,x2,y2+h2-r2,r2);
-      ctx2.lineTo(x2,y2+r2);
-      ctx2.arcTo(x2,y2,x2+r2,y2,r2);
-      ctx2.closePath();
-    }
-
-    var rx2=vpState.maxX-vpState.minX||0.01;
-    var ry2=vpState.maxY-vpState.minY||0.01;
-
-    QUAN_ZONES.forEach(function(z){
-      var hasStore=matchQuan(z.n);
-      var sx2=(z.x-vpState.minX)/rx2*W;
-      var sy2=(z.y-vpState.minY)/ry2*H;
-      var sw=z.w/rx2*W;
-      var sh=z.h/ry2*H;
-      if(sw<6||sh<6)return;
-
-      roundRect(ctx,sx2,sy2,sw,sh,5);
-      ctx.fillStyle=hasStore?z.fill:'rgba(200,215,200,.07)';ctx.fill();
-      ctx.strokeStyle=hasStore?z.border:'rgba(160,190,160,.30)';
-      ctx.lineWidth=hasStore?1.8:0.8;ctx.stroke();
-
-      // Ten quan: luon hien, dam hon khi co cua hang
-      if(sw>20&&sh>14){
-        var fs=Math.max(9,Math.min(11,Math.round(sw/13)));
-        ctx.font='bold '+fs+'px sans-serif';
-        ctx.textAlign='left';ctx.textBaseline='top';
-        ctx.fillStyle=hasStore
-          ? z.border.replace(/rgba\(([^,]+,[^,]+,[^,]+),[.\d]+\)/,'rgba($1,.90)')
-          : 'rgba(120,150,120,.45)';
-        ctx.fillText(z.n,sx2+5,sy2+4);
-      }
+      var m=L.marker(ll,{icon:makeIcon(color,lbl,selSt>0?32:26,selSt===1?'rgba(231,112,58,.3)':selSt===2?'rgba(22,163,74,.3)':null)})
+        .addTo(leafletRt);
+      m.bindPopup(
+        '<div class="lf-popup-inner">'+
+        '<div class="lf-name">'+(i+1)+'. '+esc(s.tenCH)+'</div>'+
+        '<div class="lf-area">'+esc(s.quan)+'</div>'+
+        '<span class="lf-tag" style="background:'+tb+';color:'+color+';">'+tl+'</span>'+
+        '<div class="lf-prods">'+prodTxt+'</div>'+
+        '<div class="lf-hint">Chạm marker để chọn vào tuyến</div>'+
+        (s.mapUrl?'<a href="'+s.mapUrl+'" target="_blank" style="display:inline-block;margin-top:6px;padding:5px 10px;border-radius:7px;background:'+color+';color:#fff;font-size:11px;font-weight:700;text-decoration:none;">📍 Dẫn đường</a>':'')+
+        '</div>'
+      );
+      m.on('click',function(e){
+        L.DomEvent.stopPropagation(e);
+        m.closePopup();
+        var cur=rtSelState[pi]||0;
+        if(cur===0){rtSelState[pi]=1;rtSelOrder.push(pi);}
+        else if(cur===1){rtSelState[pi]=2;}
+        else{rtSelState[pi]=0;rtSelOrder=rtSelOrder.filter(function(x){return x!==pi;});}
+        updateRtLeaflet();
+      });
+      rtMarkerObjs.push({marker:m,pi:pi,ll:ll,baseColor:baseColor,type:type,name:s.tenCH});
     });
 
-    // == Ve mui ten theo thu tu nguoi giao chon (3 trang thai) ==
-    // rtSel: mang cac {ptIdx, state} theo thu tu chon: state 1=chua giao, 2=da giao
+    leafletRt.fitBounds(L.latLngBounds(bounds).pad(0.12));
+    updateRtLeaflet();
+  }
+
+  function isDoneK(k){return getStatus(k)==='done';}
+
+  function updateRtLeaflet(){
+    if(!leafletRt)return;
+    // Xoa polylines cu
+    rtPolylines.forEach(function(pl){leafletRt.removeLayer(pl);});
+    rtPolylines=[];
+
+    // Cap nhat tung marker
+    rtMarkerObjs.forEach(function(obj){
+      var selSt=rtSelState[obj.pi]||0;
+      var color=selSt===2?'#16a34a':selSt===1?'#e8703a':obj.baseColor;
+      var ri=rtSelOrder.indexOf(obj.pi);
+      var lbl=selSt===2?'✓':selSt===1?String(ri+1):String(rtMarkerObjs.indexOf(obj)+1);
+      var ring=selSt===1?'rgba(231,112,58,.35)':selSt===2?'rgba(22,163,74,.35)':null;
+      obj.marker.setIcon(makeIcon(color,lbl,selSt>0?32:26,ring));
+      if(selSt>0)obj.marker.setZIndexOffset(500);
+      else obj.marker.setZIndexOffset(0);
+    });
+
+    // Ve polylines theo rtSelOrder
     if(rtSelOrder.length>0){
-      var prev2=toS(pts[0].x,pts[0].y); // bat dau tu Kho
-      rtSelOrder.forEach(function(si){
-        var p2=pts[si];if(!p2)return;
-        var cur2=toS(p2.x,p2.y);
-        var isDone2=rtSelState[si]===2;
-        // Ve duong
-        ctx.beginPath();ctx.moveTo(prev2.x,prev2.y);ctx.lineTo(cur2.x,cur2.y);
-        if(isDone2){
-          ctx.strokeStyle='rgba(22,163,74,.72)';ctx.lineWidth=2.5;ctx.setLineDash([9,5]);
-        } else {
-          ctx.strokeStyle='rgba(231,112,58,.88)';ctx.lineWidth=2.5;ctx.setLineDash([]);
-        }
-        ctx.lineCap='round';ctx.stroke();ctx.setLineDash([]);
-        // Mui ten o giua doan
-        var mx2=(prev2.x+cur2.x)/2,my2=(prev2.y+cur2.y)/2;
-        var ang3=Math.atan2(cur2.y-prev2.y,cur2.x-prev2.x);
-        ctx.save();ctx.translate(mx2,my2);ctx.rotate(ang3);
-        ctx.beginPath();ctx.moveTo(-6,-4.5);ctx.lineTo(0,0);ctx.lineTo(-6,4.5);
-        ctx.strokeStyle=isDone2?'rgba(22,163,74,.85)':'rgba(231,112,58,.95)';
-        ctx.lineWidth=2;ctx.lineCap='round';ctx.lineJoin='round';ctx.stroke();
-        ctx.restore();
-        prev2=cur2;
+      var prevLL=DEPOT_LL;
+      rtSelOrder.forEach(function(pi2){
+        var obj=rtMarkerObjs.find(function(o){return o.pi===pi2;});
+        if(!obj)return;
+        var isDn=rtSelState[pi2]===2;
+        var pl=L.polyline([prevLL,obj.ll],{
+          color:isDn?'#16a34a':'#e8703a',
+          weight:3.5,opacity:.88,
+          dashArray:isDn?'10,6':null
+        }).addTo(leafletRt);
+        rtPolylines.push(pl);
+        prevLL=obj.ll;
       });
     }
 
-    // Ve diem - 3 trang thai: 0=chua chon(xanh), 1=trong tuyen(cam), 2=da giao(xanh la)
-    pts.forEach(function(p,pi){
-      if(!inView(p.x,p.y))return;
-      var sp=toS(p.x,p.y);
-      var x=sp.x,y=sp.y;
-      var isDepot=p.t==='depot';
-      // Mau goc theo loai don (cho diem chua chon)
-      var baseColor={depot:'#1a6b35',order:'#1976d2',gap:'#dc2626',sap:'#d97706',done:'#888'}[p.t]||'#1976d2';
-      // Uu tien mau trang thai nguoi giao chon
-      var selSt=isDepot?-1:(rtSelState[pi]||0);
-      var color=isDepot?'#1a6b35':selSt===2?'#16a34a':selSt===1?'#e8703a':baseColor;
-      var r=isDepot?10:(selSt>0?9:7);
-
-      // Gap pulse ring
-      if(p.t==='gap'&&selSt===0){ctx.beginPath();ctx.arc(x,y,r+5,0,Math.PI*2);ctx.fillStyle='rgba(220,38,38,.15)';ctx.fill();}
-      // Vong sang cho diem da chon
-      if(selSt===1){ctx.beginPath();ctx.arc(x,y,r+5,0,Math.PI*2);ctx.fillStyle='rgba(231,112,58,.15)';ctx.fill();}
-      if(selSt===2){ctx.beginPath();ctx.arc(x,y,r+5,0,Math.PI*2);ctx.fillStyle='rgba(22,163,74,.15)';ctx.fill();}
-
-      ctx.shadowColor='rgba(0,0,0,.22)';ctx.shadowBlur=4;
-      ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fillStyle=color;ctx.fill();
-      ctx.shadowBlur=0;
-      ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.stroke();
-
-      ctx.fillStyle='#fff';ctx.textAlign='center';ctx.textBaseline='middle';
-      ctx.font='bold '+(isDepot?'6.5':'8')+'px sans-serif';
-      if(isDepot){ctx.fillText('KHO',x,y);}
-      else if(selSt===2){ctx.fillText('✓',x,y);}
-      else if(selSt===1){
-        var ri2=rtSelOrder.indexOf(pi);
-        ctx.fillText(ri2+1,x,y);
-      } else {
-        ctx.fillText(p.idx,x,y);
-      }
-
-      // Ten cua hang - luon hien, dam hon khi da chon
-      if(!isDepot){
-        ctx.font=(selSt>0?'bold ':'')+'9px sans-serif';
-        var tw=ctx.measureText(p.name).width;
-        var preferLeft=x>W*0.65;
-        var tx2=preferLeft?x-r-4:x+r+4;
-        var bx=Math.max(2,Math.min(W-tw-6,preferLeft?tx2-tw-2:tx2-2));
-        var by=Math.max(2,Math.min(H-15,y-7));
-        ctx.fillStyle=selSt>0?'rgba(255,255,255,.95)':'rgba(255,255,255,.82)';
-        ctx.fillRect(bx,by,tw+4,14);
-        if(selSt>0){ctx.strokeStyle=color+'88';ctx.lineWidth=0.8;ctx.strokeRect(bx,by,tw+4,14);}
-        ctx.fillStyle=selSt>0?color:(p.t==='done'?'#aaa':baseColor);
-        ctx.textAlign='left';ctx.textBaseline='middle';ctx.fillText(p.name,bx+2,by+7);
-      }
-    });
-
-    // Chi dan huong goc
-    ctx.font='bold 9px sans-serif';ctx.textBaseline='middle';ctx.textAlign='center';
-    ctx.fillStyle='rgba(0,0,0,.18)';
-    ctx.fillText('B',W/2,9);ctx.fillText('S',W/2,H-9);
-    ctx.fillStyle='rgba(0,0,0,.15)';
-    ctx.fillText('T',9,H/2);ctx.fillText('D',W-9,H/2);
-    // Status bar
+    // Cap nhat status bar
     var inRt=rtSelOrder.length;
-    var dnRt=rtSelOrder.filter(function(si){return rtSelState[si]===2;}).length;
+    var dnRt=rtSelOrder.filter(function(pi2){return rtSelState[pi2]===2;}).length;
     var sbEl=document.getElementById('routeSelStatus');
     if(sbEl){
-      if(inRt===0){sbEl.textContent='Cham vao cua hang de chon diem giao';}
-      else{sbEl.textContent=inRt+' diem trong tuyen · '+dnRt+' da giao · '+(inRt-dnRt)+' con lai';}
+      sbEl.textContent=inRt===0?'Chạm vào cửa hàng để chọn điểm giao':
+        inRt+' điểm · '+dnRt+' đã giao · '+(inRt-dnRt)+' còn lại';
     }
   }
 
-  // Zoom functions
-  function zoomMap(factor){
-    var cx=(vpState.minX+vpState.maxX)/2;
-    var cy=(vpState.minY+vpState.maxY)/2;
-    var rx=(vpState.maxX-vpState.minX)*factor/2;
-    var ry=(vpState.maxY-vpState.minY)*factor/2;
-    vpState.minX=Math.max(0,cx-rx);vpState.maxX=Math.min(1,cx+rx);
-    vpState.minY=Math.max(0,cy-ry);vpState.maxY=Math.min(1,cy+ry);
-    drawSimpleMap();
-  }
+  // Dat lai tuyen
+  var resetBtn2=document.createElement('button');
+  resetBtn2.textContent='Đặt lại tuyến';
+  resetBtn2.style.cssText='display:block;width:calc(100%-28px);margin:8px 14px;padding:11px;border-radius:10px;border:1.5px solid var(--bd2);background:var(--bg);color:var(--mu);font-family:sans-serif;font-size:13px;font-weight:700;cursor:pointer;text-align:center;';
+  resetBtn2.onclick=function(){rtSelState={};rtSelOrder=[];updateRtLeaflet();};
+  el.appendChild(resetBtn2);
 
-  // Pan/drag - touch va mouse
-  var drag={active:false,sx:0,sy:0,vMinX:0,vMaxX:0,vMinY:0,vMaxY:0,pinchDist:0};
-
-  function screenToWorld(sx,sy,W,H){
-    var rx=vpState.maxX-vpState.minX||0.01;
-    var ry=vpState.maxY-vpState.minY||0.01;
-    return {x:vpState.minX+sx/W*rx, y:vpState.minY+sy/H*ry};
-  }
-
-  function addDragEvents(){
-    var el=cvas;
-    // Mouse
-    el.addEventListener('mousedown',function(e){
-      drag.active=true;drag.sx=e.clientX;drag.sy=e.clientY;
-      drag.vMinX=vpState.minX;drag.vMaxX=vpState.maxX;
-      drag.vMinY=vpState.minY;drag.vMaxY=vpState.maxY;
-      el.style.cursor='grabbing';
-    });
-    window.addEventListener('mousemove',function(e){
-      if(!drag.active)return;
-      var W=cvas.width||360,H=cvas.height||240;
-      var rx=vpState.maxX-vpState.minX,ry=vpState.maxY-vpState.minY;
-      var dx=(e.clientX-drag.sx)/W*rx;
-      var dy=(e.clientY-drag.sy)/H*ry;
-      vpState.minX=drag.vMinX-dx;vpState.maxX=drag.vMaxX-dx;
-      vpState.minY=drag.vMinY-dy;vpState.maxY=drag.vMaxY-dy;
-      drawSimpleMap();
-    });
-    window.addEventListener('mouseup',function(){drag.active=false;el.style.cursor='grab';});
-
-    // Touch - 1 ngon keo, 2 ngon pinch zoom
-    el.addEventListener('touchstart',function(e){
-      if(e.touches.length===1){
-        drag.active=true;
-        drag.sx=e.touches[0].clientX;drag.sy=e.touches[0].clientY;
-        drag.vMinX=vpState.minX;drag.vMaxX=vpState.maxX;
-        drag.vMinY=vpState.minY;drag.vMaxY=vpState.maxY;
-      } else if(e.touches.length===2){
-        drag.active=false;
-        var dx=e.touches[0].clientX-e.touches[1].clientX;
-        var dy=e.touches[0].clientY-e.touches[1].clientY;
-        drag.pinchDist=Math.sqrt(dx*dx+dy*dy);
-        drag.vMinX=vpState.minX;drag.vMaxX=vpState.maxX;
-        drag.vMinY=vpState.minY;drag.vMaxY=vpState.maxY;
-      }
-      e.preventDefault();
-    },{passive:false});
-
-    el.addEventListener('touchmove',function(e){
-      if(e.touches.length===1&&drag.active){
-        var W=cvas.width||360,H=cvas.height||240;
-        var rx=drag.vMaxX-drag.vMinX,ry=drag.vMaxY-drag.vMinY;
-        var dx=(e.touches[0].clientX-drag.sx)/W*rx;
-        var dy=(e.touches[0].clientY-drag.sy)/H*ry;
-        vpState.minX=drag.vMinX-dx;vpState.maxX=drag.vMaxX-dx;
-        vpState.minY=drag.vMinY-dy;vpState.maxY=drag.vMaxY-dy;
-        drawSimpleMap();
-      } else if(e.touches.length===2){
-        var dx2=e.touches[0].clientX-e.touches[1].clientX;
-        var dy2=e.touches[0].clientY-e.touches[1].clientY;
-        var newDist=Math.sqrt(dx2*dx2+dy2*dy2);
-        if(drag.pinchDist>0){
-          var factor=drag.pinchDist/newDist;
-          var cx=(drag.vMinX+drag.vMaxX)/2;
-          var cy=(drag.vMinY+drag.vMaxY)/2;
-          var rx2=(drag.vMaxX-drag.vMinX)*factor/2;
-          var ry2=(drag.vMaxY-drag.vMinY)*factor/2;
-          vpState.minX=Math.max(0,cx-rx2);vpState.maxX=Math.min(1,cx+rx2);
-          vpState.minY=Math.max(0,cy-ry2);vpState.maxY=Math.min(1,cy+ry2);
-          drag.pinchDist=newDist;
-          drag.vMinX=vpState.minX;drag.vMaxX=vpState.maxX;
-          drag.vMinY=vpState.minY;drag.vMaxY=vpState.maxY;
-          drawSimpleMap();
-        }
-      }
-      e.preventDefault();
-    },{passive:false});
-
-    el.addEventListener('touchend',function(){drag.active=false;drag.pinchDist=0;});
-    el.style.cursor='grab';
-    el.style.touchAction='none';
-  }
-
-  // Them zoom buttons
-  var zbDiv=document.createElement('div');
-  zbDiv.style.cssText='position:absolute;top:8px;right:8px;display:flex;flex-direction:column;gap:4px;z-index:5;';
-  [['+',function(){zoomMap(0.65);}],['-',function(){zoomMap(1.5);}],['□',function(){fitViewport();drawSimpleMap();}]].forEach(function(b){
-    var btn=document.createElement('button');
-    btn.textContent=b[0];
-    btn.style.cssText='width:32px;height:32px;border-radius:9px;border:none;background:rgba(255,255,255,.92);font-size:17px;font-weight:700;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.15);color:#333;';
-    btn.onclick=b[1];
-    zbDiv.appendChild(btn);
-  });
-  mapWrap2.id='mapCanvasWrap2';
-  mapWrap2.appendChild(zbDiv);
-
-  addDragEvents();
-  fitViewport();
+  // Khoi dong sau khi DOM render
   setTimeout(function(){
-    mapWrap2.style.height=Math.round((mapWrap2.offsetWidth||360)*0.72)+'px';
-    drawSimpleMap();
-  },80);
+    mapWrap2.style.height='';
+    initRtLeaflet();
+  },120);
 
-  // Toggle list
-  var listVisible=false;
-  var toggleBar=document.createElement('div');
-  toggleBar.style.cssText='display:flex;align-items:center;justify-content:center;gap:6px;padding:8px 14px;background:var(--sf);border-top:1px solid var(--bd);cursor:pointer;';
-  toggleBar.innerHTML='<span style="font-size:12px;font-weight:700;color:var(--gr);">Xem danh sach</span><svg id="toggleArrow" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--gr)" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg>';
-  toggleBar.onclick=function(){
-    listVisible=!listVisible;
-    listContainer.style.display=listVisible?'block':'none';
-    document.getElementById('toggleArrow').style.transform=listVisible?'rotate(180deg)':'';
-    toggleBar.querySelector('span').textContent=listVisible?'Thu gon':'Xem danh sach';
-  };
-  el.appendChild(toggleBar);
-  var listContainer=document.createElement('div');
-  listContainer.style.display='none';
-  el.appendChild(listContainer);
-  var elList=listContainer; // dung thay vi el cho phan duoi
-
-  // Toggle danh sach
-  var listVisible=false;
-  var toggleBar=document.createElement('div');
-  toggleBar.style.cssText='display:flex;align-items:center;justify-content:center;gap:6px;padding:9px 14px;background:var(--sf);border-top:1px solid var(--bd);cursor:pointer;';
-  var tSpan=document.createElement('span');tSpan.style.cssText='font-size:12px;font-weight:700;color:var(--gr);';tSpan.textContent='Xem danh sach diem';
-  var tArrow=document.createElement('span');tArrow.textContent='▼';tArrow.style.cssText='font-size:10px;color:var(--gr);transition:transform .2s;';
-  toggleBar.appendChild(tSpan);toggleBar.appendChild(tArrow);
+  // Danh sach theo quan (co the thu gon)
+  var tglBar=document.createElement('div');
+  tglBar.style.cssText='display:flex;align-items:center;justify-content:center;gap:6px;padding:9px 14px;background:var(--sf);border-top:1px solid var(--bd);cursor:pointer;';
+  var tglSpan=document.createElement('span');tglSpan.style.cssText='font-size:12px;font-weight:700;color:var(--gr);';tglSpan.textContent='Xem danh sach diem';
+  var tglArrow=document.createElement('span');tglArrow.textContent='▼';tglArrow.style.cssText='font-size:10px;color:var(--gr);display:inline-block;transition:transform .2s;';
+  tglBar.appendChild(tglSpan);tglBar.appendChild(tglArrow);
   var listWrap=document.createElement('div');listWrap.style.display='none';
-  toggleBar.onclick=function(){
+  var listVisible=false;
+  tglBar.onclick=function(){
     listVisible=!listVisible;
     listWrap.style.display=listVisible?'block':'none';
-    tArrow.style.transform=listVisible?'rotate(180deg)':'';
-    tSpan.textContent=listVisible?'Thu gon danh sach':'Xem danh sach diem';
+    tglArrow.style.transform=listVisible?'rotate(180deg)':'';
+    tglSpan.textContent=listVisible?'Thu gon':'Xem danh sach diem';
   };
-  el.appendChild(toggleBar);
+  el.appendChild(tglBar);
   el.appendChild(listWrap);
-
-  // Touch+Mouse drag/pan tren canvas
-  var drag={on:false,sx:0,sy:0,v0:null,pinch:0};
-  function addMapDrag(){
-    cvas.style.cursor='grab';cvas.style.touchAction='none';
-    function startDrag(cx,cy){drag.on=true;drag.sx=cx;drag.sy=cy;drag.v0=JSON.parse(JSON.stringify(vpState));}
-    function moveDrag(cx,cy){
-      if(!drag.on||!drag.v0)return;
-      var W=cvas.width||360,H=cvas.height||240;
-      var rx=drag.v0.maxX-drag.v0.minX,ry=drag.v0.maxY-drag.v0.minY;
-      var dx=(cx-drag.sx)/W*rx,dy=(cy-drag.sy)/H*ry;
-      vpState.minX=drag.v0.minX-dx;vpState.maxX=drag.v0.maxX-dx;
-      vpState.minY=drag.v0.minY-dy;vpState.maxY=drag.v0.maxY-dy;
-      drawSimpleMap();
-    }
-    cvas.addEventListener('mousedown',function(e){startDrag(e.clientX,e.clientY);cvas.style.cursor='grabbing';});
-    window.addEventListener('mousemove',function(e){moveDrag(e.clientX,e.clientY);});
-    window.addEventListener('mouseup',function(){drag.on=false;cvas.style.cursor='grab';});
-    cvas.addEventListener('touchstart',function(e){
-      if(e.touches.length===1){startDrag(e.touches[0].clientX,e.touches[0].clientY);}
-      else if(e.touches.length===2){
-        drag.on=false;
-        var dx=e.touches[0].clientX-e.touches[1].clientX,dy=e.touches[0].clientY-e.touches[1].clientY;
-        drag.pinch=Math.sqrt(dx*dx+dy*dy);drag.v0=JSON.parse(JSON.stringify(vpState));
-      }
-      e.preventDefault();
-    },{passive:false});
-    cvas.addEventListener('touchmove',function(e){
-      if(e.touches.length===1&&drag.on){moveDrag(e.touches[0].clientX,e.touches[0].clientY);}
-      else if(e.touches.length===2&&drag.pinch>0){
-        var dx=e.touches[0].clientX-e.touches[1].clientX,dy=e.touches[0].clientY-e.touches[1].clientY;
-        var nd=Math.sqrt(dx*dx+dy*dy);
-        var f=drag.pinch/nd;
-        var cx2=(drag.v0.minX+drag.v0.maxX)/2,cy2=(drag.v0.minY+drag.v0.maxY)/2;
-        var rx2=(drag.v0.maxX-drag.v0.minX)*f/2,ry2=(drag.v0.maxY-drag.v0.minY)*f/2;
-        vpState.minX=Math.max(0,cx2-rx2);vpState.maxX=Math.min(1,cx2+rx2);
-        vpState.minY=Math.max(0,cy2-ry2);vpState.maxY=Math.min(1,cy2+ry2);
-        drag.pinch=nd;drag.v0=JSON.parse(JSON.stringify(vpState));
-        drawSimpleMap();
-      }
-      e.preventDefault();
-    },{passive:false});
-    cvas.addEventListener('touchend',function(){drag.on=false;drag.pinch=0;});
-  }
-  addMapDrag();
-
-  // == CLICK CHON DIEM (phan biet voi drag) ==
-  var tapStart={x:0,y:0};
-  cvas.addEventListener('mousedown',function(e){tapStart={x:e.clientX,y:e.clientY};});
-  cvas.addEventListener('click',function(e){
-    var dx=e.clientX-tapStart.x,dy=e.clientY-tapStart.y;
-    if(Math.sqrt(dx*dx+dy*dy)>6)return; // keo thi bo qua
-    var rect=cvas.getBoundingClientRect();
-    var mx=e.clientX-rect.left,my=e.clientY-rect.top;
-    var W=cvas.width||360,H=cvas.height||240;
-    var hit=-1,bestD=999;
-    pts.forEach(function(p,pi){
-      if(p.t==='depot')return;
-      var sp=toS(p.x,p.y);
-      var dx2=mx-sp.x,dy2=my-sp.y,d=Math.sqrt(dx2*dx2+dy2*dy2);
-      if(d<20&&d<bestD){bestD=d;hit=pi;}
-    });
-    if(hit<0)return;
-    var cur=rtSelState[hit]||0;
-    if(cur===0){rtSelState[hit]=1;rtSelOrder.push(hit);}
-    else if(cur===1){rtSelState[hit]=2;}
-    else{rtSelState[hit]=0;rtSelOrder=rtSelOrder.filter(function(x){return x!==hit;});}
-    drawSimpleMap();
-  });
-  cvas.addEventListener('touchstart',function(e){if(e.touches.length===1)tapStart={x:e.touches[0].clientX,y:e.touches[0].clientY};},{passive:true});
-  cvas.addEventListener('touchend',function(e){
-    if(e.changedTouches.length!==1)return;
-    var t=e.changedTouches[0];
-    var dx=t.clientX-tapStart.x,dy=t.clientY-tapStart.y;
-    if(Math.sqrt(dx*dx+dy*dy)>8)return;
-    var rect=cvas.getBoundingClientRect();
-    var mx=t.clientX-rect.left,my=t.clientY-rect.top;
-    var W=cvas.width||360,H=cvas.height||240;
-    var hit=-1,bestD=999;
-    pts.forEach(function(p,pi){
-      if(p.t==='depot')return;
-      var sp=toS(p.x,p.y);
-      var dx2=mx-sp.x,dy2=my-sp.y,d=Math.sqrt(dx2*dx2+dy2*dy2);
-      if(d<22&&d<bestD){bestD=d;hit=pi;}
-    });
-    if(hit<0)return;
-    var cur=rtSelState[hit]||0;
-    if(cur===0){rtSelState[hit]=1;rtSelOrder.push(hit);}
-    else if(cur===1){rtSelState[hit]=2;}
-    else{rtSelState[hit]=0;rtSelOrder=rtSelOrder.filter(function(x){return x!==hit;});}
-    drawSimpleMap();
-  },{passive:true});
-
-  // Toggle danh sach diem
-  var listVisible=false;
-  var toggleBar=document.createElement('div');
-  toggleBar.style.cssText='display:flex;align-items:center;justify-content:center;gap:6px;padding:9px 14px;background:var(--sf);border-top:1px solid var(--bd);cursor:pointer;';
-  var tSpan=document.createElement('span');tSpan.style.cssText='font-size:12px;font-weight:700;color:var(--gr);';tSpan.textContent='Xem danh sach diem';
-  var tArrow=document.createElement('span');tArrow.textContent='▼';tArrow.style.cssText='font-size:10px;color:var(--gr);display:inline-block;transition:transform .2s;';
-  toggleBar.appendChild(tSpan);toggleBar.appendChild(tArrow);
-  var listWrap=document.createElement('div');listWrap.style.display='none';
-  toggleBar.onclick=function(){
-    listVisible=!listVisible;
-    listWrap.style.display=listVisible?'block':'none';
-    tArrow.style.transform=listVisible?'rotate(180deg)':'';
-    tSpan.textContent=listVisible?'Thu gon':'Xem danh sach diem';
-  };
-  el.appendChild(toggleBar);
-  el.appendChild(listWrap);
-
-  // Legend ngang phia duoi
-  var legEl=document.createElement('div');
-  legEl.style.cssText='display:flex;gap:12px;padding:7px 14px;background:var(--sf);border-top:.5px solid var(--bd);flex-wrap:wrap;font-size:10px;color:var(--mu);';
-  [['#1a6b35','Kho'],['#1976d2','Don dat'],['#dc2626','Gap!'],['#d97706','Sap het'],['#888','Da giao']].forEach(function(item){
-    var span=document.createElement('div');
-    span.style.cssText='display:flex;align-items:center;gap:4px;';
-    span.innerHTML='<div style="width:9px;height:9px;border-radius:50%;background:'+item[0]+';"></div>'+item[1];
-    legEl.appendChild(span);
-  });
-  el.appendChild(legEl);
+  var elList=listWrap;
 
   // Danh sach theo quan
   var quanMap={};
