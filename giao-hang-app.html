@@ -374,6 +374,10 @@ body{font-family:'Be Vietnam Pro',sans-serif;background:var(--bg);color:var(--tx
       <input id="storeSearchInput" type="text" placeholder="Tim kiem cua hang..." oninput="renderStoreSelectList(this.value)" style="flex:1;padding:8px 11px;border-radius:8px;border:1px solid var(--bd2);background:var(--bg);font-family:sans-serif;font-size:13px;color:var(--tx);outline:none;">
       <span id="storeCount" style="font-size:11px;color:var(--mu);white-space:nowrap;flex-shrink:0;"></span>
     </div>
+    <div id="routePreviewMap" style="position:relative;background:#e0ebd8;height:160px;border-bottom:.5px solid var(--bd);overflow:hidden;">
+      <canvas id="routePreviewCanvas" style="display:block;width:100%;height:100%;"></canvas>
+      <div style="position:absolute;top:4px;left:6px;font-size:9px;font-weight:700;color:rgba(0,0,0,.3);">Xem truoc lo trinh</div>
+    </div>
     <div id="storeSelectList"></div>
     <div style="padding:12px 16px;">
       <button onclick="saveCurrentRoute()" style="width:100%;padding:14px;border-radius:12px;border:none;background:var(--gr);color:#fff;font-family:sans-serif;font-size:15px;font-weight:700;cursor:pointer;">Luu tuyen</button>
@@ -1824,6 +1828,7 @@ function computeSmartRoute(){
 var savedRoutes=ld('gh_saved_routes',[]);
 var editRouteIdx=-1;
 var selectedStoresForRoute={};
+var routeOrder=[]; // giu thu tu cac diem da chon
 var ROUTE_COLORS=['#1a6b35','#1976d2','#7c3aed','#d97706','#0891b2'];
 
 
@@ -1962,13 +1967,18 @@ function toggleRouteExpand(chevEl){
 function openCreateRoute(editIdx){
   editRouteIdx=(editIdx!==undefined)?editIdx:-1;
   selectedStoresForRoute={};
+  routeOrder=[];
   var modal=document.getElementById('createRouteModal');
   var nameInp=document.getElementById('routeNameInput');
   var title=document.getElementById('createRouteTitle');
   if(editIdx>=0&&savedRoutes[editIdx]){
     nameInp.value=savedRoutes[editIdx].name||'';
     title.textContent='Sua tuyen';
-    (savedRoutes[editIdx].stores||[]).forEach(function(s){selectedStoresForRoute[s.tenCH]=s;});
+    routeOrder=[];
+    (savedRoutes[editIdx].stores||[]).forEach(function(s){
+      selectedStoresForRoute[s.tenCH]=s;
+      routeOrder.push(s.tenCH);
+    });
   } else {
     nameInp.value='';
     title.textContent='Tao tuyen moi';
@@ -1976,8 +1986,158 @@ function openCreateRoute(editIdx){
   var si=document.getElementById('storeSearchInput');if(si)si.value='';
   renderStoreSelectList();
   modal.classList.add('on');
+  setTimeout(drawRoutePreview,100);
 }
 function closeCreateRoute(){document.getElementById('createRouteModal').classList.remove('on');}
+
+function drawRoutePreview(){
+  var cvas=document.getElementById('routePreviewCanvas');
+  var wrap=document.getElementById('routePreviewMap');
+  if(!cvas||!wrap)return;
+  var W=wrap.offsetWidth||300,H=160;
+  cvas.width=W;cvas.height=H;
+  var ctx=cvas.getContext('2d');
+  ctx.fillStyle='#e0ebd8';ctx.fillRect(0,0,W,H);
+  var ordered=routeOrder.map(function(k){return selectedStoresForRoute[k];}).filter(Boolean);
+  if(!ordered.length){
+    ctx.font='11px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillStyle='rgba(0,0,0,.25)';
+    ctx.fillText('Chon cua hang de xem lo trinh',W/2,H/2);
+    return;
+  }
+  var QPOS4={'Tay Ho':{x:.55,y:.12},'Bac TU Liem':{x:.25,y:.15},'Long Bien':{x:.84,y:.30},
+    'Cau Giay':{x:.33,y:.33},'Ba Dinh':{x:.52,y:.28},'Dong Da':{x:.52,y:.45},
+    'Hai Ba Trung':{x:.67,y:.46},'Nam TU Liem':{x:.22,y:.42},'Nam TL':{x:.20,y:.54},
+    'Thanh Xuan':{x:.50,y:.61},'Ha Dong':{x:.22,y:.74},'Hoang Mai':{x:.64,y:.70},
+    'Gia Lam':{x:.86,y:.42},'Hoan Kiem':{x:.60,y:.38}};
+  function getQP4(q){if(!q)return{x:.5,y:.5};for(var k in QPOS4){if(q.toLowerCase().indexOf(k.toLowerCase())>=0)return QPOS4[k];}return{x:.5,y:.5};}
+  var qc4={};
+  var pts4=[{x:.12,y:.88,depot:true,nm:'KHO'}];
+  ordered.forEach(function(s,i){
+    var q=s.quan||'';if(!qc4[q])qc4[q]=0;
+    var b=getQP4(q),ang=qc4[q]*2.399,rad=0.05+Math.floor(qc4[q]/4)*0.04;qc4[q]++;
+    pts4.push({x:Math.max(.04,Math.min(.96,b.x+Math.cos(ang)*rad)),
+               y:Math.max(.04,Math.min(.96,b.y+Math.sin(ang)*rad*1.1)),
+               nm:(s.tenCH||'').slice(0,8),idx:i+1});
+  });
+  var xs=pts4.map(function(p){return p.x;}),ys=pts4.map(function(p){return p.y;});
+  var mnX=Math.max(0,Math.min.apply(null,xs)-.12),mxX=Math.min(1,Math.max.apply(null,xs)+.12);
+  var mnY=Math.max(0,Math.min.apply(null,ys)-.12),mxY=Math.min(1,Math.max.apply(null,ys)+.12);
+  function ts4(px,py){return{x:(px-mnX)/(mxX-mnX||.01)*W,y:(py-mnY)/(mxY-mnY||.01)*H};}
+  // Duong noi + mui ten
+  for(var i=0;i<pts4.length-1;i++){
+    var pa=ts4(pts4[i].x,pts4[i].y),pb=ts4(pts4[i+1].x,pts4[i+1].y);
+    ctx.beginPath();ctx.moveTo(pa.x,pa.y);ctx.lineTo(pb.x,pb.y);
+    ctx.strokeStyle='rgba(26,107,53,.65)';ctx.lineWidth=1.8;ctx.setLineDash([7,4]);ctx.lineCap='round';ctx.stroke();ctx.setLineDash([]);
+    var mx=(pa.x+pb.x)/2,my=(pa.y+pb.y)/2,ang2=Math.atan2(pb.y-pa.y,pb.x-pa.x);
+    ctx.save();ctx.translate(mx,my);ctx.rotate(ang2);
+    ctx.beginPath();ctx.moveTo(-5,-4);ctx.lineTo(0,0);ctx.lineTo(-5,4);
+    ctx.strokeStyle='rgba(26,107,53,.85)';ctx.lineWidth=1.5;ctx.lineCap='round';ctx.lineJoin='round';ctx.stroke();
+    ctx.restore();
+  }
+  // Ve diem
+  pts4.forEach(function(p){
+    var sp=ts4(p.x,p.y),r=p.depot?7:6,color=p.depot?'#1a6b35':'#1976d2';
+    ctx.beginPath();ctx.arc(sp.x,sp.y,r,0,Math.PI*2);ctx.fillStyle=color;ctx.fill();
+    ctx.strokeStyle='#fff';ctx.lineWidth=1.5;ctx.stroke();
+    ctx.font='bold '+(p.depot?'6':'7.5')+'px sans-serif';
+    ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillStyle='#fff';
+    ctx.fillText(p.depot?'K':p.idx,sp.x,sp.y);
+    if(p.nm){
+      ctx.font='8px sans-serif';var tw=ctx.measureText(p.nm).width;
+      var preferLeft=sp.x>W*.65;
+      var bx=Math.max(1,Math.min(W-tw-3,preferLeft?sp.x-r-tw-4:sp.x+r+1));
+      ctx.fillStyle='rgba(255,255,255,.88)';ctx.fillRect(bx,sp.y-5,tw+2,10);
+      ctx.fillStyle=color;ctx.textAlign='left';ctx.textBaseline='middle';ctx.fillText(p.nm,bx+1,sp.y);
+    }
+  });
+}
+
+function drawRoutePreview(){
+  var cvas=document.getElementById('routePreviewCanvas');
+  var wrap=document.getElementById('routePreviewMap');
+  if(!cvas||!wrap)return;
+  var W=wrap.offsetWidth||300,H=160;
+  cvas.width=W;cvas.height=H;
+  var ctx=cvas.getContext('2d');
+  ctx.fillStyle='#e0ebd8';ctx.fillRect(0,0,W,H);
+
+  // Lay cac diem da chon theo thu tu
+  var ordered=routeOrder.map(function(k){return selectedStoresForRoute[k];}).filter(Boolean);
+  if(!ordered.length){
+    ctx.font='11px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillStyle='rgba(0,0,0,.25)';
+    ctx.fillText('Chon cua hang de xem lo trinh',W/2,H/2);
+    return;
+  }
+
+  // Map quan -> toa do (dung QUAN_POS tu computeSmartRoute)
+  var QPOS3={'Tay Ho':{x:.55,y:.12},'Bac TU Liem':{x:.25,y:.15},'Bac TL':{x:.42,y:.14},
+    'Long Bien':{x:.84,y:.30},'Cau Giay':{x:.33,y:.33},'Ba Dinh':{x:.52,y:.28},
+    'Hoan Kiem':{x:.60,y:.38},'Dong Da':{x:.52,y:.45},'Hai Ba Trung':{x:.67,y:.46},
+    'Nam TU Liem':{x:.22,y:.42},'Nam TL':{x:.20,y:.54},'Thanh Xuan':{x:.50,y:.61},
+    'Ha Dong':{x:.22,y:.74},'Hoang Mai':{x:.64,y:.70},'Gia Lam':{x:.86,y:.42}};
+  function getQP(q){
+    if(!q)return{x:.5,y:.5};
+    for(var k in QPOS3){if(q.toLowerCase().indexOf(k.toLowerCase())>=0)return QPOS3[k];}
+    return{x:.5,y:.5};
+  }
+  var qc3={};
+  var pts3=[{x:.12,y:.88,depot:true,nm:'KHO'}];
+  ordered.forEach(function(s){
+    var q=s.quan||'';if(!qc3[q])qc3[q]=0;
+    var b=getQP(q);
+    var ang=qc3[q]*2.399,rad=0.05+Math.floor(qc3[q]/4)*0.04;
+    qc3[q]++;
+    pts3.push({x:Math.max(.04,Math.min(.96,b.x+Math.cos(ang)*rad)),
+               y:Math.max(.04,Math.min(.96,b.y+Math.sin(ang)*rad*1.1)),
+               nm:(s.tenCH||'').slice(0,8)});
+  });
+
+  // Fit viewport
+  var xs=pts3.map(function(p){return p.x;}),ys=pts3.map(function(p){return p.y;});
+  var mnX=Math.max(0,Math.min.apply(null,xs)-.12),mxX=Math.min(1,Math.max.apply(null,xs)+.12);
+  var mnY=Math.max(0,Math.min.apply(null,ys)-.12),mxY=Math.min(1,Math.max.apply(null,ys)+.12);
+  function ts3(px,py){return{x:(px-mnX)/(mxX-mnX||.01)*W,y:(py-mnY)/(mxY-mnY||.01)*H};}
+
+  // Duong noi va mui ten
+  for(var i=0;i<pts3.length-1;i++){
+    var pa=ts3(pts3[i].x,pts3[i].y);
+    var pb=ts3(pts3[i+1].x,pts3[i+1].y);
+    // Duong noi
+    ctx.beginPath();ctx.moveTo(pa.x,pa.y);ctx.lineTo(pb.x,pb.y);
+    ctx.strokeStyle='rgba(26,107,53,.65)';ctx.lineWidth=1.8;ctx.setLineDash([7,4]);ctx.lineCap='round';ctx.stroke();ctx.setLineDash([]);
+    // Mui ten o giua doan
+    var mx=(pa.x+pb.x)/2,my=(pa.y+pb.y)/2;
+    var ang2=Math.atan2(pb.y-pa.y,pb.x-pa.x);
+    ctx.save();ctx.translate(mx,my);ctx.rotate(ang2);
+    ctx.beginPath();ctx.moveTo(-5,-4);ctx.lineTo(0,0);ctx.lineTo(-5,4);
+    ctx.strokeStyle='rgba(26,107,53,.8)';ctx.lineWidth=1.5;ctx.lineCap='round';ctx.lineJoin='round';ctx.stroke();
+    ctx.restore();
+  }
+
+  // Ve cac diem
+  pts3.forEach(function(p,i){
+    var sp=ts3(p.x,p.y);
+    var r=p.depot?7:6;
+    var color=p.depot?'#1a6b35':'#1976d2';
+    ctx.beginPath();ctx.arc(sp.x,sp.y,r,0,Math.PI*2);ctx.fillStyle=color;ctx.fill();
+    ctx.strokeStyle='#fff';ctx.lineWidth=1.5;ctx.stroke();
+    ctx.font='bold '+(p.depot?'6':'7')+'px sans-serif';
+    ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillStyle='#fff';
+    if(p.depot)ctx.fillText('K',sp.x,sp.y);else ctx.fillText(i,sp.x,sp.y);
+    // Ten
+    if(p.nm){
+      ctx.font='8px sans-serif';
+      var tw2=ctx.measureText(p.nm).width;
+      var preferLeft=sp.x>W*.65;
+      var tx2=preferLeft?sp.x-r-3:sp.x+r+3;
+      var bx2=Math.max(1,Math.min(W-tw2-3,preferLeft?tx2-tw2-1:tx2-1));
+      ctx.fillStyle='rgba(255,255,255,.88)';ctx.fillRect(bx2,sp.y-5,tw2+2,10);
+      ctx.fillStyle=color;ctx.textAlign='left';ctx.textBaseline='middle';ctx.fillText(p.nm,bx2+1,sp.y);
+    }
+  });
+}
 
 function renderStoreSelectList(query){
   var el=document.getElementById('storeSelectList');
@@ -2010,9 +2170,15 @@ function renderStoreSelectList(query){
     row.innerHTML='<div class="ssr-chk'+(isOn?' on':'')+'"><svg width="10" height="10" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>'+
       '<span class="ssr-nm">'+esc(s.tenCH)+'</span><span class="ssr-area">'+esc(s.quan)+'</span>';
     row.onclick=(function(st){return function(){
-      if(selectedStoresForRoute[st.tenCH])delete selectedStoresForRoute[st.tenCH];
-      else selectedStoresForRoute[st.tenCH]=st;
+      if(selectedStoresForRoute[st.tenCH]){
+        delete selectedStoresForRoute[st.tenCH];
+        routeOrder=routeOrder.filter(function(k){return k!==st.tenCH;});
+      } else {
+        selectedStoresForRoute[st.tenCH]=st;
+        routeOrder.push(st.tenCH);
+      }
       renderStoreSelectList();
+      drawRoutePreview();
     };})(s);
     el.appendChild(row);
   });
@@ -2020,7 +2186,8 @@ function renderStoreSelectList(query){
 
 function saveCurrentRoute(){
   var name=document.getElementById('routeNameInput').value.trim()||'Tuyen moi';
-  var stores=Object.values(selectedStoresForRoute);
+  var stores=routeOrder.map(function(k){return selectedStoresForRoute[k];}).filter(Boolean);
+  if(!stores.length)stores=Object.values(selectedStoresForRoute);
   if(!stores.length)return toast('Chua chon sieu thi nao!');
   var route={name:name,stores:stores,createdAt:todayStr()};
   if(editRouteIdx>=0)savedRoutes[editRouteIdx]=route;
