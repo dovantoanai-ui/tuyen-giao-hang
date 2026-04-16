@@ -200,7 +200,7 @@ body{font-family:'Be Vietnam Pro',sans-serif;background:var(--bg);color:var(--tx
 .add-tuyen{border-radius:13px;border:1.5px dashed var(--bd2);padding:16px;text-align:center;cursor:pointer;margin:0 14px 12px;}
 .add-tuyen-ico{width:36px;height:36px;border-radius:50%;background:var(--bg);display:flex;align-items:center;justify-content:center;margin:0 auto 7px;}
 /* MODAL */
-.modal-overlay{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.5);z-index:200;align-items:flex-end;}
+.modal-overlay{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.5);z-index:9999;align-items:flex-end;}
 .modal-overlay.on{display:flex;}
 .modal-box{background:var(--sf);border-radius:16px 16px 0 0;padding:0 0 30px;width:100%;max-height:85vh;overflow-y:auto;}
 .modal-hd{display:flex;align-items:center;padding:14px 16px;border-bottom:1px solid var(--bd);}
@@ -1400,66 +1400,73 @@ function computeSmartRoute(){
     // Nen
     ctx.fillStyle='#eef4ea'; ctx.fillRect(0,0,W,H);
 
-    // Ve vung quan (ellipse mau)
+    // Ve vung quan - hinh chu nhat, vien mau nhat
     var QUAN_ZONES=[
-      {n:'Tay Ho',      cx:.55,cy:.12,rx:.16,ry:.10, fill:'rgba(8,145,178,.22)', stroke:'rgba(8,145,178,.7)'},
-      {n:'Bac TU Liem', cx:.25,cy:.15,rx:.14,ry:.10, fill:'rgba(124,58,237,.18)',stroke:'rgba(124,58,237,.65)'},
-      {n:'Bac TL',      cx:.42,cy:.13,rx:.12,ry:.09, fill:'rgba(99,102,241,.18)',stroke:'rgba(99,102,241,.65)'},
-      {n:'Long Bien',   cx:.84,cy:.30,rx:.11,ry:.13, fill:'rgba(217,119,6,.2)',  stroke:'rgba(217,119,6,.65)'},
-      {n:'Cau Giay',    cx:.32,cy:.34,rx:.15,ry:.12, fill:'rgba(25,118,210,.2)', stroke:'rgba(25,118,210,.7)'},
-      {n:'Ba Dinh',     cx:.52,cy:.27,rx:.12,ry:.10, fill:'rgba(220,38,38,.16)', stroke:'rgba(220,38,38,.6)'},
-      {n:'Hoan Kiem',   cx:.62,cy:.38,rx:.09,ry:.08, fill:'rgba(234,88,12,.18)', stroke:'rgba(234,88,12,.6)'},
-      {n:'Dong Da',     cx:.52,cy:.46,rx:.12,ry:.10, fill:'rgba(5,150,105,.18)', stroke:'rgba(5,150,105,.6)'},
-      {n:'Hai Ba Trung',cx:.67,cy:.47,rx:.11,ry:.10, fill:'rgba(239,68,68,.18)', stroke:'rgba(239,68,68,.6)'},
-      {n:'Nam TU Liem', cx:.21,cy:.43,rx:.12,ry:.10, fill:'rgba(126,34,206,.18)',stroke:'rgba(126,34,206,.6)'},
-      {n:'Nam TL',      cx:.19,cy:.55,rx:.13,ry:.12, fill:'rgba(26,107,53,.22)', stroke:'rgba(26,107,53,.7)'},
-      {n:'Thanh Xuan',  cx:.50,cy:.62,rx:.14,ry:.10, fill:'rgba(217,119,6,.2)',  stroke:'rgba(217,119,6,.65)'},
-      {n:'Ha Dong',     cx:.21,cy:.75,rx:.13,ry:.10, fill:'rgba(124,58,237,.18)',stroke:'rgba(124,58,237,.6)'},
-      {n:'Hoang Mai',   cx:.65,cy:.71,rx:.13,ry:.10, fill:'rgba(220,38,38,.18)', stroke:'rgba(220,38,38,.6)'},
-      {n:'Gia Lam',     cx:.86,cy:.43,rx:.10,ry:.12, fill:'rgba(8,145,178,.18)', stroke:'rgba(8,145,178,.6)'},
-      {n:'Thuong Tin',  cx:.50,cy:.91,rx:.11,ry:.07, fill:'rgba(5,150,105,.16)', stroke:'rgba(5,150,105,.55)'},
+      {n:'Tay Ho',      x:.38,y:.02,w:.30,h:.18, fill:'rgba(8,145,178,.10)',   border:'rgba(8,145,178,.38)'},
+      {n:'Bac TU Liem', x:.05,y:.03,w:.25,h:.16, fill:'rgba(124,58,237,.10)',  border:'rgba(124,58,237,.35)'},
+      {n:'Long Bien',   x:.76,y:.10,w:.22,h:.22, fill:'rgba(217,119,6,.10)',   border:'rgba(217,119,6,.35)'},
+      {n:'Cau Giay',    x:.10,y:.20,w:.28,h:.22, fill:'rgba(25,118,210,.10)',  border:'rgba(25,118,210,.38)'},
+      {n:'Ba Dinh',     x:.40,y:.16,w:.22,h:.18, fill:'rgba(220,38,38,.08)',   border:'rgba(220,38,38,.30)'},
+      {n:'Hoan Kiem',   x:.63,y:.26,w:.16,h:.16, fill:'rgba(234,88,12,.08)',   border:'rgba(234,88,12,.30)'},
+      {n:'Dong Da',     x:.38,y:.34,w:.24,h:.20, fill:'rgba(5,150,105,.10)',   border:'rgba(5,150,105,.32)'},
+      {n:'Hai Ba Trung',x:.63,y:.34,w:.22,h:.20, fill:'rgba(239,68,68,.09)',   border:'rgba(239,68,68,.32)'},
+      {n:'Nam TU Liem', x:.05,y:.32,w:.24,h:.18, fill:'rgba(126,34,206,.09)',  border:'rgba(126,34,206,.30)'},
+      {n:'Nam TL',      x:.05,y:.46,w:.24,h:.22, fill:'rgba(26,107,53,.10)',   border:'rgba(26,107,53,.32)'},
+      {n:'Thanh Xuan',  x:.32,y:.52,w:.28,h:.18, fill:'rgba(217,119,6,.10)',   border:'rgba(217,119,6,.32)'},
+      {n:'Ha Dong',     x:.05,y:.65,w:.26,h:.20, fill:'rgba(124,58,237,.09)',  border:'rgba(124,58,237,.30)'},
+      {n:'Hoang Mai',   x:.56,y:.56,w:.26,h:.20, fill:'rgba(220,38,38,.09)',   border:'rgba(220,38,38,.30)'},
+      {n:'Gia Lam',     x:.76,y:.32,w:.22,h:.22, fill:'rgba(8,145,178,.09)',   border:'rgba(8,145,178,.30)'},
     ];
 
-    // Chi ve quan co sieu thi
+    // Match quan cua hang voi zone
     var activeQuans={};
     pts.forEach(function(p){if(p.quan)activeQuans[p.quan]=1;});
 
-    QUAN_ZONES.forEach(function(z){
-      var hasStore=false;
+    function matchQuan(name){
       for(var k in activeQuans){
-        if(k.toLowerCase().indexOf(z.n.toLowerCase())>=0||z.n.toLowerCase().indexOf(k.toLowerCase())>=0){
-          hasStore=true;break;
-        }
+        if(k.toLowerCase().indexOf(name.toLowerCase())>=0||name.toLowerCase().indexOf(k.toLowerCase())>=0)return true;
       }
-      var sp=toS(z.cx,z.cy);
-      var ex=z.rx/(vpState.maxX-vpState.minX)*W;
-      var ey=z.ry/(vpState.maxY-vpState.minY)*H;
-      if(ex<2||ey<2)return;
+      return false;
+    }
 
-      ctx.save();ctx.translate(sp.x,sp.y);
-      ctx.beginPath();ctx.ellipse(0,0,ex,ey,0,0,Math.PI*2);
-      // Fill
-      ctx.fillStyle=hasStore?z.fill:'rgba(200,210,200,.04)';ctx.fill();
-      // Border - dam hon voi quan co sieu thi
-      ctx.strokeStyle=hasStore?z.stroke:'rgba(180,195,180,.15)';
-      ctx.lineWidth=hasStore?2:0.5;
-      if(hasStore)ctx.setLineDash([]);
-      ctx.stroke();ctx.setLineDash([]);
-      ctx.restore();
+    // Ham ve o chu nhat bo goc
+    function roundRect(ctx2,x2,y2,w2,h2,r2){
+      ctx2.beginPath();
+      ctx2.moveTo(x2+r2,y2);ctx2.lineTo(x2+w2-r2,y2);
+      ctx2.arcTo(x2+w2,y2,x2+w2,y2+r2,r2);
+      ctx2.lineTo(x2+w2,y2+h2-r2);
+      ctx2.arcTo(x2+w2,y2+h2,x2+w2-r2,y2+h2,r2);
+      ctx2.lineTo(x2+r2,y2+h2);
+      ctx2.arcTo(x2,y2+h2,x2,y2+h2-r2,r2);
+      ctx2.lineTo(x2,y2+r2);
+      ctx2.arcTo(x2,y2,x2+r2,y2,r2);
+      ctx2.closePath();
+    }
 
-      // Ten quan - hien ro hon
-      if(hasStore&&ex>20){
-        var fs=ex>60?10:ex>35?9:8;
-        // Background label
+    var rx2=vpState.maxX-vpState.minX||0.01;
+    var ry2=vpState.maxY-vpState.minY||0.01;
+
+    QUAN_ZONES.forEach(function(z){
+      var hasStore=matchQuan(z.n);
+      // Chuyen toa do world -> screen
+      var sx2=(z.x-vpState.minX)/rx2*W;
+      var sy2=(z.y-vpState.minY)/ry2*H;
+      var sw=z.w/rx2*W;
+      var sh=z.h/ry2*H;
+      if(sw<8||sh<8)return;
+
+      roundRect(ctx,sx2,sy2,sw,sh,5);
+      ctx.fillStyle=hasStore?z.fill:'rgba(200,215,200,.04)';ctx.fill();
+      ctx.strokeStyle=hasStore?z.border:'rgba(180,200,180,.15)';
+      ctx.lineWidth=hasStore?1.2:0.5;ctx.stroke();
+
+      // Ten quan: goc tren trai, nho, mau nhat
+      if(hasStore&&sw>30){
+        var fs=Math.max(8,Math.min(10,Math.round(sw/14)));
         ctx.font='bold '+fs+'px sans-serif';
-        ctx.textAlign='center';ctx.textBaseline='middle';
-        var tw2=ctx.measureText(z.n).width;
-        ctx.fillStyle='rgba(255,255,255,.75)';
-        ctx.fillRect(sp.x-tw2/2-3,sp.y-fs/2-2,tw2+6,fs+4);
-        // Text
-        var strokeColor=z.stroke.replace(/[\d.]+\)$/,'1)');
-        ctx.fillStyle=strokeColor;
-        ctx.fillText(z.n,sp.x,sp.y);
+        ctx.textAlign='left';ctx.textBaseline='top';
+        ctx.fillStyle=z.border.replace(/rgba\(([^,]+,[^,]+,[^,]+),[.\d]+\)/,'rgba($1,.75)');
+        ctx.fillText(z.n,sx2+5,sy2+4);
       }
     });
 
@@ -1976,28 +1983,19 @@ function renderStoreSelectList(query){
   var el=document.getElementById('storeSelectList');
   el.innerHTML='';
   var storeSet={};
-  if(sheetRows&&sheetRows.length){
-    sheetRows.forEach(function(r){
-      if(!r.tenCH)return;
-      storeSet[r.tenCH]={tenCH:r.tenCH,quan:r.quan||'',mapUrl:r.mapUrl||''};
-    });
-  }
-  if(!Object.keys(storeSet).length){
-    deliveries.forEach(function(r){if(r.tenCH)storeSet[r.tenCH]={tenCH:r.tenCH,quan:r.quan||'',mapUrl:r.mapUrl||''};});
-  }
+  // Lay tat ca cua hang da tung giao (tu tat ca ngay, khong chi hom nay)
+  var allDeliveries=ld('gh_all_stores',{});
+  // Merge voi deliveries hom nay
+  deliveries.forEach(function(r){
+    if(r.tenCH)allDeliveries[r.tenCH]={tenCH:r.tenCH,quan:r.quan||'',mapUrl:r.mapUrl||''};
+  });
+  sv('gh_all_stores',allDeliveries);
+  storeSet=allDeliveries;
   var stores=Object.values(storeSet).sort(function(a,b){
     var qa=a.quan||'ZZZ',qb=b.quan||'ZZZ';
     if(qa!==qb)return qa.localeCompare(qb,'vi');
     return (a.tenCH||'').localeCompare(b.tenCH||'','vi');
   });
-  if(query&&query.trim()){
-    var q2=query.trim().toLowerCase();
-    stores=stores.filter(function(s){
-      return (s.tenCH||'').toLowerCase().indexOf(q2)>=0||(s.quan||'').toLowerCase().indexOf(q2)>=0;
-    });
-  }
-  var cntEl=document.getElementById('storeCount');
-  if(cntEl)cntEl.textContent=Object.keys(selectedStoresForRoute).length+' chon / '+stores.length;
   if(query&&query.trim()){
     var q2=query.trim().toLowerCase();
     stores=stores.filter(function(s){
